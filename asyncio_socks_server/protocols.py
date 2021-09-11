@@ -66,7 +66,7 @@ class LocalTCP(asyncio.Protocol):
     async def negotiate_task(self):
         def gen_reply(
             status: Status,
-            bind_host: str = self.config.BIND_HOST,
+            bind_host: str = self.config.BIND_ADDR,
             bind_port: int = 0,
         ) -> bytes:
             """
@@ -155,7 +155,7 @@ class LocalTCP(asyncio.Protocol):
                     raise CommandExecError("GENERAL_SOCKS_SERVER_FAILURE") from None
                 else:
                     self.local_udp = local_udp
-                    BIND_ADDR = self.config.BIND_HOST
+                    BIND_ADDR = self.config.BIND_ADDR
                     _, BIND_PORT = udp_transport.get_extra_info("sockname")
                     self.transport.write(
                         gen_reply(Status.SUCCEEDED, BIND_ADDR, BIND_PORT)
@@ -301,7 +301,7 @@ class LocalUDP(asyncio.DatagramProtocol):
     def datagram_received(self, data: bytes, local_host_port: Tuple[str, int]):
         cond1 = self.host_port_limit in (("0.0.0.0", 0), ("::", 0))
         cond2 = self.host_port_limit == local_host_port
-        cond3 = self.config.UDP_ORIGIN_LIMIT == False
+        cond3 = self.config.STRICT_UDP_ORIGIN == False
         if not (cond1 or cond2 or cond3):
             return
         loop = asyncio.get_event_loop()

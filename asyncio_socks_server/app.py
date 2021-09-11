@@ -14,10 +14,14 @@ class SocksServer:
         self,
         config: Union[str, dict, Any] = None,
         env_prefix: Optional[str] = SOCKS_SERVER_PREFIX,
+        **config_args,
     ):
         self.loop = asyncio.get_event_loop()
-        self.config = Config(env_prefix=env_prefix)
+        self.config = Config()
         self.config.update_config(config)
+        self.config.load_environment_vars(env_prefix)
+        self.config.update_config(config_args)
+
         self.__init_logger()
         self.__init_proxyman()
 
@@ -35,14 +39,8 @@ class SocksServer:
         await self.proxyman.close_server()
         self.loop.stop()
 
-    def run(self, listen_host=None, listen_port=None):
-        if listen_host and listen_port:
-            self.config.LISTEN_HOST = listen_host
-            self.config.LISTEN_PORT = listen_port
-
-        self.loop.create_task(
-            self.proxyman.start_server(self.config.LISTEN_HOST, self.config.LISTEN_PORT)
-        )
+    def run(self):
+        self.loop.create_task(self.proxyman.start_server())
 
         signals = (signal.SIGINT,)
         for s in signals:

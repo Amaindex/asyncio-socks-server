@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Union
 from asyncio_socks_server.utils import load_dict_from_json_file_location, str_to_bool
 from asyncio_socks_server.values import AuthMethods
 
-SOCKS_SERVER_PREFIX = "SS_"
+SOCKS_SERVER_PREFIX = "AIOSS_"
 
 BASE_LOGO = """
 
@@ -19,9 +19,9 @@ DEFAULT_CONFIG = {
     "LISTEN_PORT": 8848,
     "AUTH_METHOD": AuthMethods.NO_AUTH,
     "ACCESS_LOG": True,
+    "STRICT_UDP_ORIGIN": False,
+    "BIND_ADDR": "0.0.0.0",
     "DEBUG": True,
-    "BIND_HOST": "0.0.0.0",
-    "UDP_ORIGIN_LIMIT": False,
     "USERS": {},
 }
 
@@ -31,22 +31,15 @@ class Config(dict):
     LISTEN_PORT: int
     AUTH_METHOD: int
     ACCESS_LOG: bool
+    STRICT_UDP_ORIGIN: bool
+    BIND_ADDR: str
     DEBUG: bool
-    BIND_HOST: str
-    UDP_ORIGIN_LIMIT: bool
     USERS: dict
 
     def __init__(
         self,
-        env_prefix: Optional[str] = SOCKS_SERVER_PREFIX,
     ):
         super().__init__({**DEFAULT_CONFIG})
-
-        if env_prefix != SOCKS_SERVER_PREFIX:
-            if env_prefix:
-                self.load_environment_vars(env_prefix)
-        else:
-            self.load_environment_vars(SOCKS_SERVER_PREFIX)
 
     def __getattr__(self, attr):
         try:
@@ -73,6 +66,9 @@ class Config(dict):
 
         (This function is referenced from Sanic.)
         """
+
+        if not prefix:
+            return
 
         for k, v in environ.items():
             if k.startswith(prefix):

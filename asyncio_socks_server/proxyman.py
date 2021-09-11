@@ -11,9 +11,9 @@ class ProxyMan:
         self.loop = asyncio.get_event_loop()
         self.server = None
 
-    async def start_server(self, listen_host, listen_port):
+    async def start_server(self):
         server = await self.loop.create_server(
-            lambda: LocalTCP(self.config), listen_host, listen_port
+            lambda: LocalTCP(self.config), self.config.LISTEN_HOST, self.config.LISTEN_PORT
         )
         self.server = server
 
