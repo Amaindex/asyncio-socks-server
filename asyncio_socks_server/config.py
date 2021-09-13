@@ -16,7 +16,7 @@ BASE_LOGO = """
 
 DEFAULT_CONFIG = {
     "LISTEN_HOST": "0.0.0.0",
-    "LISTEN_PORT": 8848,
+    "LISTEN_PORT": 1080,
     "AUTH_METHOD": AuthMethods.NO_AUTH,
     "ACCESS_LOG": True,
     "STRICT_UDP_ORIGIN": False,

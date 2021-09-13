@@ -56,7 +56,7 @@ class PasswordAuthenticator(BaseAuthenticator):
         VER = await self._stream_reader.readexactly(1)
         if VER != b"\x01":
             self._write_transport.write(b"\x01\x01")
-            raise NoVersionAllowed(
+            raise AuthenticationError(
                 f"Unsupported user/password authentication version{VER}!"
             )
 
