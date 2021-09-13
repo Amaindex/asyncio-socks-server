@@ -15,7 +15,7 @@ class NoVersionAllowed(SocksException):
 
 
 class NoCommandAllowed(SocksException):
-    """The server does not support the socks command used by the client."""
+    """The server does not support the socks command from the client."""
 
 
 class CommandExecError(SocksException):
@@ -27,7 +27,7 @@ class HeaderParseError(SocksException):
 
 
 class NoAtypAllowed(SocksException):
-    """The server does not support the address type used by the client."""
+    """The server does not support the address type specified in the request."""
 
 
 class AuthenticationError(SocksException):
@@ -35,4 +35,4 @@ class AuthenticationError(SocksException):
 
 
 class NoAuthMethodAllowed(SocksException):
-    """The server does not support the authentication methods provided by the client"""
+    """The server does not support the authentication methods provided by the client."""
