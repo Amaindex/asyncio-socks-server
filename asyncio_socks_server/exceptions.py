@@ -1,48 +1,38 @@
 class ServerException(Exception):
-
-    pass
+    """Base exception of socks server."""
 
 
 class LoadFileError(ServerException):
-
-    pass
+    """Socks server failed to load file."""
 
 
 class SocksException(Exception):
-
-    pass
+    """Base exception of socks protocol."""
 
 
 class NoVersionAllowed(SocksException):
-
-    pass
+    """The server does not support the socks protocol version used by the client."""
 
 
 class NoCommandAllowed(SocksException):
-
-    pass
+    """The server does not support the socks command used by the client."""
 
 
 class CommandExecError(SocksException):
-
-    pass
+    """An error occurred during the execution of the socks command."""
 
 
 class HeaderParseError(SocksException):
-
-    pass
+    """An error occurred during parsing of the socks header"""
 
 
 class NoAtypAllowed(SocksException):
-
-    pass
+    """The server does not support the address type used by the client."""
 
 
 class AuthenticationError(SocksException):
-
-    pass
+    """Failed to authenticate the client."""
 
 
 class NoAuthMethodAllowed(SocksException):
-
-    pass
+    """The server does not support the authentication methods provided by the client"""
