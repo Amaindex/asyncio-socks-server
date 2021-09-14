@@ -64,11 +64,58 @@ class LocalTCP(asyncio.Protocol):
         )
 
     async def negotiate_task(self):
+        """Negotiate with the client. Find more detail in RFC1928.
+
+        **Step 1.1**
+        The client connects to the server, and sends a version
+        identifier/method selection message: ::
+
+            +----+----------+----------+
+            |VER | NMETHODS | METHODS  |
+            +----+----------+----------+
+            | 1  |    1     | 1 to 255 |
+            +----+----------+----------+
+
+        **Step 1.2**
+        The server selects from one of the methods given in METHODS, and
+        sends a METHOD selection message: ::
+
+            +----+--------+
+            |VER | METHOD |
+            +----+--------+
+            | 1  |   1    |
+            +----+--------+
+
+        **Step 1.3**
+        The client and the server enter a method-specific sub-negotiation.
+
+        **Step 2.1**
+        The client send a socks request formed as follows: ::
+
+            +----+-----+-------+------+----------+----------+
+            |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
+            +----+-----+-------+------+----------+----------+
+            | 1  |  1  | X'00' |  1   | Variable |    2     |
+            +----+-----+-------+------+----------+----------+
+
+        **Step 2.2**
+        The server return a reply formed as follows: ::
+
+            +----+-----+-------+------+----------+----------+
+            |VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
+            +----+-----+-------+------+----------+----------+
+            | 1  |  1  | X'00' |  1   | Variable |    2     |
+            +----+-----+-------+------+----------+----------+
+
+        """
+
         def gen_reply(
             status: Status,
             bind_host: str = self.config.BIND_ADDR,
             bind_port: int = 0,
         ) -> bytes:
+            """Generate reply for step 2.2"""
+
             VER, RSV = b"\x05", b"\x00"
             ATYP = get_atyp_from_host(bind_host)
             if ATYP == Atyp.IPV4:
@@ -83,11 +130,14 @@ class LocalTCP(asyncio.Protocol):
             return VER + REP + RSV + ATYP + BND_ADDR + BND_PORT
 
         try:
+            # Step 1.1
             VER, NMETHODS = await self.stream_reader.readexactly(2)
             if VER != 5:
                 self.transport.write(b"\x05\xff")
                 raise NoVersionAllowed(f"Received unsupported socks version: {VER}")
             METHODS = set(await self.stream_reader.readexactly(NMETHODS))
+
+            # Step 1.2
             authenticator = self.authenticator_cls(
                 self.stream_reader, self.transport, self.config
             )
@@ -95,8 +145,11 @@ class LocalTCP(asyncio.Protocol):
             self.transport.write(b"\x05" + METHOD.to_bytes(1, "big"))
             if METHOD == 0xFF:
                 raise NoAuthMethodAllowed("No authentication method is available")
+
+            # Step 1.3
             await authenticator.authenticate()
 
+            # Step 2.1
             VER, CMD, RSV, ATYP = await self.stream_reader.readexactly(4)
             if ATYP == Atyp.IPV4:
                 DST_ADDR = inet_ntop(AF_INET, await self.stream_reader.readexactly(4))
@@ -112,6 +165,7 @@ class LocalTCP(asyncio.Protocol):
                 raise NoAtypAllowed(f"Received unsupported ATYP value: {ATYP}")
             DST_PORT = int.from_bytes(await self.stream_reader.readexactly(2), "big")
 
+            # Step 2.2
             if CMD == Command.CONNECT:
                 try:
                     loop = asyncio.get_running_loop()
@@ -139,8 +193,8 @@ class LocalTCP(asyncio.Protocol):
                     self.stage = self.STAGE_CONNECT
 
                     self.config.ACCESS_LOG and access_logger.info(
-                        f"Established TCP streaming "
-                        f"between {self.peername} and {self.remote_tcp.peername}"
+                        f"Established TCP stream between"
+                        f" {self.peername} and {self.remote_tcp.peername}"
                     )
             elif CMD == Command.UDP_ASSOCIATE:
                 try:
@@ -271,6 +325,21 @@ class LocalUDP(asyncio.DatagramProtocol):
 
     @staticmethod
     def parse_udp_request_header(data: bytes):
+        """Parse the header of UDP request.
+
+        Each UDP datagram carries a UDP request header formed as follows: ::
+
+            +----+------+------+----------+----------+----------+
+            |RSV | FRAG | ATYP | DST.ADDR | DST.PORT |   DATA   |
+            +----+------+------+----------+----------+----------+
+            | 2  |  1   |  1   | Variable |    2     | Variable |
+            +----+------+------+----------+----------+----------+
+
+        :param data: UDP datagram
+        :return: A tuple containing header fields and header length
+        :raise HeaderParseError: If parsing fails
+        """
+
         length = 0
         RSV = data[length : length + 2]
         length += 2
@@ -332,7 +401,9 @@ class LocalUDP(asyncio.DatagramProtocol):
             remote_udp = self.remote_udp_table[local_host_port]
             remote_udp.write(data[header_length:], (DST_ADDR, DST_PORT))
         except Exception as e:
-            error_logger.warning(f"{e} during the relay request from {local_host_port}")
+            error_logger.warning(
+                f"{e} during relaying the request from {local_host_port}"
+            )
             return
 
     def close(self):
@@ -371,6 +442,24 @@ class RemoteUDP(asyncio.DatagramProtocol):
 
     @staticmethod
     def gen_udp_reply_header(remote_host_port: Tuple[str, int]):
+        """Generate the header of UDP reply.
+
+        When a UDP relay server receives a reply datagram from a remote
+        host, it MUST encapsulate that datagram using the UDP request
+        header: ::
+
+            +----+------+------+----------+----------+----------+
+            |RSV | FRAG | ATYP | DST.ADDR | DST.PORT |   DATA   |
+            +----+------+------+----------+----------+----------+
+            | 2  |  1   |  1   | Variable |    2     | Variable |
+            +----+------+------+----------+----------+----------+
+
+        and any authentication-method-dependent encapsulation.
+
+        :param remote_host_port: A tuple of host and port
+        :return: The bytes of the generated header
+        """
+
         RSV, FRAG = b"\x00\x00", b"\x00"
         remote_host, remote_port = remote_host_port
         ATYP = get_atyp_from_host(remote_host)
@@ -378,10 +467,8 @@ class RemoteUDP(asyncio.DatagramProtocol):
             DST_ADDR = inet_pton(AF_INET, remote_host)
         elif ATYP == Atyp.IPV6:
             DST_ADDR = inet_pton(AF_INET6, remote_host)
-        elif ATYP == Atyp.DOMAIN:
+        else:  # ATYP == Atyp.DOMAIN
             DST_ADDR = len(remote_host).to_bytes(1, "big") + remote_host.encode("UTF-8")
-        else:
-            raise HeaderParseError(f"Received unsupported ATYP value: {ATYP}")
         ATYP = ATYP.to_bytes(1, "big")
         DST_PORT = remote_port.to_bytes(2, "big")
         return RSV + FRAG + ATYP + DST_ADDR + DST_PORT
@@ -392,7 +479,7 @@ class RemoteUDP(asyncio.DatagramProtocol):
             self.local_udp.write(header + data, self.local_host_port)
         except Exception as e:
             error_logger.warning(
-                f"{e} during the relay response from {remote_host_port}"
+                f"{e} during relaying the response from {remote_host_port}"
             )
             return
 
