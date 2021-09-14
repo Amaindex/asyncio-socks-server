@@ -276,7 +276,7 @@ class LocalUDP(asyncio.DatagramProtocol):
         length += 2
         FRAG = data[length : length + 1]
         if int.from_bytes(FRAG, "big") != 0:
-            raise HeaderParseError()
+            raise HeaderParseError("Received unsupported FRAG value")
         length += 1
         ATYP = int.from_bytes(data[length : length + 1], "big")
         length += 1
@@ -294,17 +294,17 @@ class LocalUDP(asyncio.DatagramProtocol):
             DST_ADDR = inet_ntop(AF_INET6, ipv6)
             length += 16
         else:
-            raise HeaderParseError()
+            raise HeaderParseError(f"Received unsupported ATYP value: {ATYP}")
         DST_PORT = int.from_bytes(data[length : length + 2], "big")
         length += 2
         if length > len(data):
-            raise HeaderParseError()
+            raise HeaderParseError("Header is too short")
         return RSV, FRAG, ATYP, DST_ADDR, DST_PORT, length
 
     def datagram_received(self, data: bytes, local_host_port: Tuple[str, int]):
         cond1 = self.host_port_limit in (("0.0.0.0", 0), ("::", 0))
         cond2 = self.host_port_limit == local_host_port
-        cond3 = self.config.STRICT_UDP_ORIGIN == False
+        cond3 = self.config.STRICT == False
         if not (cond1 or cond2 or cond3):
             return
         loop = asyncio.get_event_loop()
@@ -381,7 +381,7 @@ class RemoteUDP(asyncio.DatagramProtocol):
         elif ATYP == Atyp.DOMAIN:
             DST_ADDR = len(remote_host).to_bytes(1, "big") + remote_host.encode("UTF-8")
         else:
-            raise HeaderParseError()
+            raise HeaderParseError(f"Received unsupported ATYP value: {ATYP}")
         ATYP = ATYP.to_bytes(1, "big")
         DST_PORT = remote_port.to_bytes(2, "big")
         return RSV + FRAG + ATYP + DST_ADDR + DST_PORT
