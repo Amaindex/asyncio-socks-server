@@ -66,13 +66,20 @@ def main():
     )
 
     parser.add_argument(
+        "--access-logs",
+        dest="access_log",
+        help="Display access logs.",
+        action="store_true",
+    )
+
+    parser.add_argument(
         "--debug", dest="debug", help="Work in debug mode.", action="store_true"
     )
 
     parser.add_argument(
-        "--access-logs",
-        dest="access_log",
-        help="Display access logs.",
+        "--strict",
+        dest="strict",
+        help="Work in strict compliance with RFC1928 and RFC1929.",
         action="store_true",
     )
 
@@ -82,15 +89,7 @@ def main():
         type=str,
         default="0.0.0.0",
         help="Value of BIND.ADDR field in the reply (default 0.0.0.0).\n"
-        "It is not necessary for most clients.",
-    )
-
-    parser.add_argument(
-        "--strict-udp-origin",
-        dest="strict_udp_origin",
-        help="Limit access to the udp association strictly by DST.ADDR \n"
-        "and DST.PORT fields specified in the request.\n ",
-        action="store_true",
+        "It is not necessary for most clients.\n ",
     )
 
     parser.add_argument(
@@ -117,7 +116,7 @@ def main():
         "LISTEN_PORT": args.port,
         "AUTH_METHOD": args.method,
         "ACCESS_LOG": args.access_log,
-        "STRICT_UDP_ORIGIN": args.strict_udp_origin,
+        "STRICT": args.strict,
         "BIND_ADDR": args.bind_addr,
         "DEBUG": args.debug,
     }

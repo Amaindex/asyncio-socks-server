@@ -19,9 +19,9 @@ DEFAULT_CONFIG = {
     "LISTEN_PORT": 1080,
     "AUTH_METHOD": AuthMethods.NO_AUTH,
     "ACCESS_LOG": True,
-    "STRICT_UDP_ORIGIN": False,
-    "BIND_ADDR": "0.0.0.0",
+    "STRICT": False,
     "DEBUG": True,
+    "BIND_ADDR": "0.0.0.0",
     "USERS": {},
 }
 
@@ -31,9 +31,9 @@ class Config(dict):
     LISTEN_PORT: int
     AUTH_METHOD: int
     ACCESS_LOG: bool
-    STRICT_UDP_ORIGIN: bool
-    BIND_ADDR: str
+    STRICT: bool
     DEBUG: bool
+    BIND_ADDR: str
     USERS: dict
 
     def __init__(

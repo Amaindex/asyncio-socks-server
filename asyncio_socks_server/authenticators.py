@@ -54,7 +54,9 @@ class PasswordAuthenticator(BaseAuthenticator):
 
     async def authenticate(self):
         VER = await self._stream_reader.readexactly(1)
-        if VER != b"\x01":
+        cond1 = VER == b"\x01"
+        cond2 = VER == b"\x05" and not self._config.STRICT
+        if not (cond1 or cond2):
             self._write_transport.write(b"\x01\x01")
             raise AuthenticationError(
                 f"Received unsupported user/password authentication version {VER}"
