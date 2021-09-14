@@ -15,7 +15,7 @@ def main():
         prog="asyncio_socks_server",
         description=BASE_LOGO,
         formatter_class=AIOSSArgumentParser,
-        add_help=False
+        add_help=False,
     )
 
     parser.add_argument(
@@ -76,21 +76,20 @@ def main():
         action="store_true",
     )
 
-
     parser.add_argument(
         "--bind-addr",
         dest="bind_addr",
         type=str,
         default="0.0.0.0",
         help="Value of BIND.ADDR field in the reply (default 0.0.0.0).\n"
-             "It is not necessary for most clients.",
+        "It is not necessary for most clients.",
     )
 
     parser.add_argument(
         "--strict-udp-origin",
         dest="strict_udp_origin",
         help="Limit access to the udp association strictly by DST.ADDR \n"
-             "and DST.PORT fields specified in the request.\n ",
+        "and DST.PORT fields specified in the request.\n ",
         action="store_true",
     )
 
@@ -99,8 +98,7 @@ def main():
         dest="path",
         type=str,
         default=None,
-        help="Path to the config file in json format.\n"
-             "Example: ./config.json",
+        help="Path to the config file in json format.\n" "Example: ./config.json",
     )
 
     parser.add_argument(
@@ -109,7 +107,7 @@ def main():
         type=str,
         default=SOCKS_SERVER_PREFIX,
         help=f"Prefix of the environment variable to be loaded as the config \n"
-             f"(default is {SOCKS_SERVER_PREFIX}).",
+        f"(default is {SOCKS_SERVER_PREFIX}).",
     )
 
     args = parser.parse_args()

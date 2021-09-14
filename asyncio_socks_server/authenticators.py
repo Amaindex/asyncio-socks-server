@@ -57,7 +57,7 @@ class PasswordAuthenticator(BaseAuthenticator):
         if VER != b"\x01":
             self._write_transport.write(b"\x01\x01")
             raise AuthenticationError(
-                f"Unsupported user/password authentication version{VER}!"
+                f"Received unsupported user/password authentication version {VER}"
             )
 
         ULEN = int.from_bytes(await self._stream_reader.readexactly(1), "big")
@@ -68,7 +68,7 @@ class PasswordAuthenticator(BaseAuthenticator):
             self._write_transport.write(b"\x01\x00")
         else:
             self._write_transport.write(b"\x01\x01")
-            raise AuthenticationError("USERNAME or PASSWORD ERROR")
+            raise AuthenticationError("USERNAME or PASSWORD is uncorrected")
 
 
 AUTHENTICATORS_CLS_LIST = [NoAuthenticator, PasswordAuthenticator]

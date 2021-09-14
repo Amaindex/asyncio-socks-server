@@ -60,7 +60,7 @@ class LocalTCP(asyncio.Protocol):
         self.stage = self.STAGE_NEGOTIATE
 
         self.config.ACCESS_LOG and access_logger.debug(
-            f"Local TCP connection made {self.peername}"
+            f"Made LocalTCP connection from {self.peername}"
         )
 
     async def negotiate_task(self):
@@ -69,9 +69,6 @@ class LocalTCP(asyncio.Protocol):
             bind_host: str = self.config.BIND_ADDR,
             bind_port: int = 0,
         ) -> bytes:
-            """
-            Constructing a response for socks5.
-            """
             VER, RSV = b"\x05", b"\x00"
             ATYP = get_atyp_from_host(bind_host)
             if ATYP == Atyp.IPV4:
@@ -89,7 +86,7 @@ class LocalTCP(asyncio.Protocol):
             VER, NMETHODS = await self.stream_reader.readexactly(2)
             if VER != 5:
                 self.transport.write(b"\x05\xff")
-                raise NoVersionAllowed(f"Unsupported socks version {VER}!")
+                raise NoVersionAllowed(f"Received unsupported socks version: {VER}")
             METHODS = set(await self.stream_reader.readexactly(NMETHODS))
             authenticator = self.authenticator_cls(
                 self.stream_reader, self.transport, self.config
@@ -97,7 +94,7 @@ class LocalTCP(asyncio.Protocol):
             METHOD = authenticator.select_method(METHODS)
             self.transport.write(b"\x05" + METHOD.to_bytes(1, "big"))
             if METHOD == 0xFF:
-                raise NoAuthMethodAllowed("No authentication methods available")
+                raise NoAuthMethodAllowed("No authentication method is available")
             await authenticator.authenticate()
 
             VER, CMD, RSV, ATYP = await self.stream_reader.readexactly(4)
@@ -112,7 +109,7 @@ class LocalTCP(asyncio.Protocol):
                 DST_ADDR = inet_ntop(AF_INET6, await self.stream_reader.readexactly(16))
             else:
                 self.transport.write(gen_reply(Status.ADDRESS_TYPE_NOT_SUPPORTED))
-                raise NoAtypAllowed(f"Unsupported ATYP value: {ATYP}")
+                raise NoAtypAllowed(f"Received unsupported ATYP value: {ATYP}")
             DST_PORT = int.from_bytes(await self.stream_reader.readexactly(2), "big")
 
             if CMD == Command.CONNECT:
@@ -124,13 +121,15 @@ class LocalTCP(asyncio.Protocol):
                     _, remote_tcp = await asyncio.wait_for(task, 5)
                 except ConnectionRefusedError:
                     self.transport.write(gen_reply(Status.CONNECTION_REFUSED))
-                    raise CommandExecError("CONNECTION_REFUSED") from None
+                    raise CommandExecError("Connection was refused") from None
                 except socket.gaierror:
                     self.transport.write(gen_reply(Status.HOST_UNREACHABLE))
-                    raise CommandExecError("HOST_UNREACHABLE") from None
+                    raise CommandExecError("Host is unreachable") from None
                 except Exception:
                     self.transport.write(gen_reply(Status.GENERAL_SOCKS_SERVER_FAILURE))
-                    raise CommandExecError("GENERAL_SOCKS_SERVER_FAILURE") from None
+                    raise CommandExecError(
+                        "General socks server failure occurred"
+                    ) from None
                 else:
                     self.remote_tcp = remote_tcp
                     BIND_ADDR, BIND_PORT = self.transport.get_extra_info("sockname")
@@ -140,7 +139,8 @@ class LocalTCP(asyncio.Protocol):
                     self.stage = self.STAGE_CONNECT
 
                     self.config.ACCESS_LOG and access_logger.info(
-                        f"TCP streaming between {self.peername} and {self.remote_tcp.peername}"
+                        f"Established TCP streaming "
+                        f"between {self.peername} and {self.remote_tcp.peername}"
                     )
             elif CMD == Command.UDP_ASSOCIATE:
                 try:
@@ -152,7 +152,9 @@ class LocalTCP(asyncio.Protocol):
                     udp_transport, local_udp = await asyncio.wait_for(task, 5)
                 except Exception:
                     self.transport.write(gen_reply(Status.GENERAL_SOCKS_SERVER_FAILURE))
-                    raise CommandExecError("GENERAL_SOCKS_SERVER_FAILURE") from None
+                    raise CommandExecError(
+                        "General socks server failure occurred"
+                    ) from None
                 else:
                     self.local_udp = local_udp
                     BIND_ADDR = self.config.BIND_ADDR
@@ -163,7 +165,8 @@ class LocalTCP(asyncio.Protocol):
                     self.stage = self.STAGE_UDP_ASSOCIATE
 
                     self.config.ACCESS_LOG and access_logger.info(
-                        f"UDP relay opened by {self.peername} at port {BIND_PORT}"
+                        f"Established UDP relay for {self.peername} "
+                        f"at {BIND_ADDR,BIND_PORT}"
                     )
             else:
                 self.transport.write(gen_reply(Status.COMMAND_NOT_SUPPORTED))
@@ -200,7 +203,7 @@ class LocalTCP(asyncio.Protocol):
         self.local_udp and self.local_udp.close()
 
         self.config.ACCESS_LOG and access_logger.debug(
-            f"Local TCP connection closed {self.peername}"
+            f"Closed LocalTCP connection from {self.peername}"
         )
 
 
@@ -221,7 +224,7 @@ class RemoteTCP(asyncio.Protocol):
         self.peername = transport.get_extra_info("peername")
 
         self.config.ACCESS_LOG and access_logger.debug(
-            f"Remote TCP connection made {self.peername}"
+            f"Made RemoteTCP connection to {self.peername}"
         )
 
     def data_received(self, data):
@@ -241,7 +244,7 @@ class RemoteTCP(asyncio.Protocol):
         self.local_tcp.close()
 
         self.config.ACCESS_LOG and access_logger.debug(
-            f"Remote TCP connection closed {self.peername}"
+            f"Closed RemoteTCP connection to {self.peername}"
         )
 
 
@@ -263,7 +266,7 @@ class LocalUDP(asyncio.DatagramProtocol):
         self.sockname = transport.get_extra_info("sockname")
 
         self.config.ACCESS_LOG and access_logger.debug(
-            f"Local UDP endpoint made {self.sockname}"
+            f"Made LocalUDP endpoint at {self.sockname}"
         )
 
     @staticmethod
@@ -341,7 +344,7 @@ class LocalUDP(asyncio.DatagramProtocol):
             self.remote_udp_table[local_host_port].close()
 
         self.config.ACCESS_LOG and access_logger.debug(
-            f"Local UDP endpoint closed {self.sockname}"
+            f"Closed LocalUDP endpoint at {self.sockname}"
         )
 
 
@@ -359,7 +362,7 @@ class RemoteUDP(asyncio.DatagramProtocol):
         self.sockname = transport.get_extra_info("sockname")
 
         self.config.ACCESS_LOG and access_logger.debug(
-            f"Remote UDP endpoint made {self.sockname}"
+            f"Made RemoteUDP endpoint at {self.sockname}"
         )
 
     def write(self, data, host_port):
@@ -401,7 +404,7 @@ class RemoteUDP(asyncio.DatagramProtocol):
         self.local_udp = None
 
         self.config.ACCESS_LOG and access_logger.debug(
-            f"Remote UDP endpoint closed {self.sockname}"
+            f"Closed RemoteUDP endpoint at {self.sockname}"
         )
 
     def error_received(self, exc):
