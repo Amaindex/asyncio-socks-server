@@ -1,12 +1,16 @@
 import asyncio
 import logging.config
 import signal
-from pprint import pprint
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional, Union
 
 from asyncio_socks_server.config import BASE_LOGO, SOCKS_SERVER_PREFIX, Config
 from asyncio_socks_server.logger import error_logger, gen_log_config, logger
 from asyncio_socks_server.proxyman import ProxyMan
+
+HANDLED_SIGNALS = (
+    signal.SIGINT,  # Unix signal 2. Sent by Ctrl+C.
+    signal.SIGTERM,  # Unix signal 15. Sent by `kill <pid>`.
+)
 
 
 class SocksServer:
@@ -33,21 +37,29 @@ class SocksServer:
         self.proxyman = ProxyMan(self.config)
 
     async def shut_down(self):
+        logger.info("Waiting for background tasks to cancel (CTRL+C to force quit)")
+
+        await self.proxyman.close_server()
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
         await asyncio.gather(*tasks, return_exceptions=True)
-        await self.proxyman.close_server()
+
         self.loop.stop()
 
     def run(self):
-        self.loop.create_task(self.proxyman.start_server())
+        self.loop.run_until_complete(self.proxyman.start_server())
 
-        signals = (signal.SIGINT,)
-        for s in signals:
+        for s in HANDLED_SIGNALS:
             self.loop.add_signal_handler(
                 s, lambda s=s: asyncio.create_task(self.shut_down())
             )
 
         logger.debug(BASE_LOGO)
+        logger.info(
+            f"Server launched on" f" {self.config.LISTEN_HOST,self.config.LISTEN_PORT}"
+        )
+
         self.loop.run_forever()
         self.loop.close()
+
+        logger.info("Server stopped")
