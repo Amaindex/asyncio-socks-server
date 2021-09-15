@@ -2,7 +2,7 @@ import asyncio
 import socket
 from asyncio.streams import StreamReader
 from socket import AF_INET, AF_INET6, inet_ntop, inet_pton
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 from asyncio_socks_server.authenticators import AUTHENTICATORS_CLS_LIST
 from asyncio_socks_server.config import Config
@@ -37,15 +37,11 @@ class LocalTCP(asyncio.Protocol):
         self.stream_reader = StreamReader()
         self.is_closing = False
         self.__init_authenticator_cls()
-        self.__init_validator()
 
     def __init_authenticator_cls(self):
         for cls in AUTHENTICATORS_CLS_LIST:
             if cls.METHOD == self.config.AUTH_METHOD:
                 self.authenticator_cls = cls
-
-    def __init_validator(self):
-        pass
 
     def write(self, data):
         if not self.transport.is_closing():

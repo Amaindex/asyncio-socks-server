@@ -1,8 +1,9 @@
-from asyncio_socks_server.app import SocksServer
-from asyncio_socks_server.logger import logger
 import argparse
-from argparse import ArgumentParser, RawTextHelpFormatter
-from asyncio_socks_server.config import BASE_LOGO, Config, SOCKS_SERVER_PREFIX
+from argparse import RawTextHelpFormatter
+
+from asyncio_socks_server.app import SocksServer
+from asyncio_socks_server.config import BASE_LOGO, SOCKS_SERVER_PREFIX, Config
+from asyncio_socks_server.logger import logger
 
 
 class AIOSSArgumentParser(RawTextHelpFormatter):
@@ -61,7 +62,7 @@ def main():
             "Authentication method (default 0).\n"
             "Possible values: "
             "0 (no auth), "
-            "3 (username/password auth)\n "
+            "2 (username/password auth)\n "
         ),
     )
 

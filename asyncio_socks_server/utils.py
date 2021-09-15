@@ -1,11 +1,7 @@
 import json
-import types
-from importlib.util import module_from_spec, spec_from_file_location
 from os import environ as os_environ
-from pathlib import Path
 from re import findall as re_findall
 from socket import AF_INET, AF_INET6, inet_pton
-from typing import Union
 
 from asyncio_socks_server.exceptions import LoadFileError
 from asyncio_socks_server.values import Atyp
@@ -93,6 +89,4 @@ def load_dict_from_json_file_location(location: str) -> dict:
             location = location.replace("${" + env_var + "}", os_environ[env_var])
 
     with open(location) as f:
-        d = json.loads(f.read())
-
-    return d
+        return json.loads(f.read())

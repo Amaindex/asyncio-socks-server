@@ -1,5 +1,4 @@
 import asyncio
-from typing import Dict
 
 from asyncio_socks_server.config import Config
 from asyncio_socks_server.protocols import LocalTCP

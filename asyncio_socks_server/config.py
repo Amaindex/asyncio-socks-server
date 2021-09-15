@@ -1,6 +1,6 @@
 from inspect import isclass
 from os import environ
-from typing import Any, Dict, Optional, Union
+from typing import Any, Union
 
 from asyncio_socks_server.utils import load_dict_from_json_file_location, str_to_bool
 from asyncio_socks_server.values import AuthMethods
@@ -36,9 +36,7 @@ class Config(dict):
     BIND_ADDR: str
     USERS: dict
 
-    def __init__(
-        self,
-    ):
+    def __init__(self):
         super().__init__({**DEFAULT_CONFIG})
 
     def __getattr__(self, attr):

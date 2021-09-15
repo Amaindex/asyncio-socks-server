@@ -1,12 +1,8 @@
 from asyncio.streams import StreamReader
 from asyncio.transports import WriteTransport
-from typing import Dict
 
 from asyncio_socks_server.config import Config
-from asyncio_socks_server.exceptions import (
-    AuthenticationError,
-    NoVersionAllowed,
-)
+from asyncio_socks_server.exceptions import AuthenticationError, NoVersionAllowed
 from asyncio_socks_server.values import AuthMethods
 
 
