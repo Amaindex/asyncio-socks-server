@@ -8,9 +8,18 @@ from asyncio_socks_server.values import Atyp
 
 
 def get_atyp_from_host(host: str) -> int:
+    """Get the address type of a given host.
+
+    If host can be recognized as an ipv4 address, return Atyp.IPV4
+
+    If host can be recognized as an ipv6 address, return Atyp.IPV6
+
+    Else return Atyp.DOMAIN
+
+    :param host: The host to recognize
+    :return: Enum value of Atyp
     """
-    return the host's ATYP.
-    """
+
     try:
         inet_pton(AF_INET, host)
         return Atyp.IPV4
@@ -29,14 +38,14 @@ def get_atyp_from_host(host: str) -> int:
 def str_to_bool(val: str) -> bool:
     """Takes string and tries to turn it into bool as human would do.
 
-    If val is in case insensitive (
-        "y", "yes", "yep", "yup", "t",
-        "true", "on", "enable", "enabled", "1"
-    ) returns True.
-    If val is in case insensitive (
-        "n", "no", "f", "false", "off", "disable", "disabled", "0"
-    ) returns False.
-    Else Raise ValueError."""
+    If val is in case insensitive ("y", "yes", "yep", "yup", "t","true", "on",
+     "enable", "enabled", "1") returns True.
+
+    If val is in case insensitive ("n", "no", "f", "false", "off", "disable",
+    "disabled", "0") returns False.
+
+    Else Raise ValueError.
+    """
 
     val = val.lower()
     if val in {
@@ -70,6 +79,13 @@ def str_to_bool(val: str) -> bool:
 
 
 def load_dict_from_json_file_location(location: str) -> dict:
+    """Load a dict from a json file location.
+
+    :param location: The location of the file
+    :return: A dict
+    :raise LoadFileError: If environment variables in the location are not set
+    :raise FileNotFoundError: If the file corresponding to the location does not exist
+    """
 
     if "$" in location:
         # A) Check if location contains any environment variables
