@@ -1,0 +1,10 @@
+{
+    "LISTEN_HOST": "0.0.0.0",
+    "LISTEN_PORT": 1080,
+    "AUTH_METHOD": 2,
+    "ACCESS_LOG": true,
+    "STRICT": true,
+    "DEBUG": true,
+    "BIND_ADDR": "0.0.0.0",
+    "USERS": {}
+}
