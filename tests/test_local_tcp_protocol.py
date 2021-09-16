@@ -34,7 +34,6 @@ def mock_transport():
 def test_connection_made(mock_transport):
     config = Config()
     local_tcp = LocalTCP(config)
-
     local_tcp.connection_made(mock_transport)
 
     assert local_tcp.transport is mock_transport
@@ -48,13 +47,64 @@ def test_connection_made(mock_transport):
 def test_negotiate_with_invalid_socks_version(mock_transport):
     config = Config()
     local_tcp = LocalTCP(config)
-
     local_tcp.connection_made(mock_transport)
 
     # VER, NMETHODS = b"\x06\x02"
     local_tcp.data_received(b"\x06\x02")
-    asyncio.get_event_loop().run_until_complete(local_tcp.negotiate_task)
+
+    with pytest.raises( asyncio.exceptions.CancelledError):
+        asyncio.get_event_loop().run_until_complete(local_tcp.negotiate_task)
 
     # NoVersionAllowed
     calls = [call(b"\x05\xff")]
+    mock_transport.write.assert_has_calls(calls)
+
+
+def test_negotiate_with_invalid_auth_method(mock_transport):
+    config = Config()
+    local_tcp = LocalTCP(config)
+    local_tcp.connection_made(mock_transport)
+
+    # VER, NMETHODS = b"\x05\x02"
+    local_tcp.data_received(b"\x05\x02")
+    # METHOD1, METHOD2 = b"\xFD\xFE"
+    local_tcp.data_received(b"\xFD\xFE")
+
+    with pytest.raises(asyncio.exceptions.CancelledError):
+        asyncio.get_event_loop().run_until_complete(local_tcp.negotiate_task)
+
+    # NoAuthMethodAllowed
+    calls = [call(b"\x05\xff")]
+    mock_transport.write.assert_has_calls(calls)
+
+
+def test_negotiate_with_wrong_username_password(mock_transport):
+    config = Config()
+    config.AUTH_METHOD = AuthMethods.PASSWORD_AUTH
+    config.USERS = {"name": "password"}
+    local_tcp = LocalTCP(config)
+    local_tcp.connection_made(mock_transport)
+
+    # VER, NMETHODS = b"\x05\x02"
+    local_tcp.data_received(b"\x05\x02")
+    # METHOD1, METHOD2 = b"\x00\x02"
+    local_tcp.data_received(b"\x00\x02")
+
+    UNAME = "wrong_name".encode("ASCII")
+    PASSWD = "wrong_password".encode("ASCII")
+    VER = b"\x01"
+    local_tcp.data_received(
+        VER
+        + int.to_bytes(len(UNAME), 1, "big")
+        + UNAME
+        + int.to_bytes(len(UNAME), 1, "big")
+        + PASSWD
+        + int.to_bytes(len(PASSWD), 1, "big")
+    )
+
+    with pytest.raises(asyncio.exceptions.CancelledError):
+        asyncio.get_event_loop().run_until_complete(local_tcp.negotiate_task)
+
+    # AuthenticationError
+    calls = [call(b"\x05\02"),call(b"\x01\x01")]
     mock_transport.write.assert_has_calls(calls)
