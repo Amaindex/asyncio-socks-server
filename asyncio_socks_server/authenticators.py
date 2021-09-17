@@ -3,7 +3,7 @@ from asyncio.transports import WriteTransport
 
 from asyncio_socks_server.config import Config
 from asyncio_socks_server.exceptions import AuthenticationError, NoVersionAllowed
-from asyncio_socks_server.values import AuthMethods
+from asyncio_socks_server.values import SocksAuthMethod
 
 
 class BaseAuthenticator:
@@ -52,7 +52,7 @@ class BaseAuthenticator:
 
 class NoAuthenticator(BaseAuthenticator):
 
-    METHOD = AuthMethods.NO_AUTH
+    METHOD = SocksAuthMethod.NO_AUTH
 
     async def authenticate(self):
         pass
@@ -61,7 +61,7 @@ class NoAuthenticator(BaseAuthenticator):
 class PasswordAuthenticator(BaseAuthenticator):
     """Username/Password Authentication for SOCKS V5. Find more detail in RFC1929."""
 
-    METHOD = AuthMethods.PASSWORD_AUTH
+    METHOD = SocksAuthMethod.PASSWORD_AUTH
 
     def verify_user(self, username: str, password: str) -> bool:
         try:

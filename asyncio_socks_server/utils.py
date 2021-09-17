@@ -4,35 +4,35 @@ from re import findall as re_findall
 from socket import AF_INET, AF_INET6, inet_pton
 
 from asyncio_socks_server.exceptions import LoadFileError
-from asyncio_socks_server.values import Atyp
+from asyncio_socks_server.values import SocksAtyp
 
 
-def get_atyp_from_host(host: str) -> int:
+def get_socks_atyp_from_host(host: str) -> int:
     """Get the address type of a given host.
 
-    If host can be recognized as an ipv4 address, return Atyp.IPV4
+    If host can be recognized as an ipv4 address, return SocksAtyp.IPV4
 
-    If host can be recognized as an ipv6 address, return Atyp.IPV6
+    If host can be recognized as an ipv6 address, return SocksAtyp.IPV6
 
-    Else return Atyp.DOMAIN
+    Else return SocksAtyp.DOMAIN
 
     :param host: The host to recognize
-    :return: Enum value of Atyp
+    :return: Enum value of SocksAtyp
     """
 
     try:
         inet_pton(AF_INET, host)
-        return Atyp.IPV4
+        return SocksAtyp.IPV4
     except OSError:
         pass
 
     try:
         inet_pton(AF_INET6, host)
-        return Atyp.IPV6
+        return SocksAtyp.IPV6
     except OSError:
         pass
 
-    return Atyp.DOMAIN
+    return SocksAtyp.DOMAIN
 
 
 def str_to_bool(val: str) -> bool:

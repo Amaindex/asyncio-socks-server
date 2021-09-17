@@ -117,9 +117,9 @@ def main():
         "LISTEN_PORT": args.port,
         "AUTH_METHOD": args.method,
         "ACCESS_LOG": args.access_log,
+        "DEBUG": args.debug,
         "STRICT": args.strict,
         "BIND_ADDR": args.bind_addr,
-        "DEBUG": args.debug,
     }
 
     app = SocksServer(config=args.path, env_prefix=args.env_prefix, **config_args)

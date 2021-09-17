@@ -1,7 +1,7 @@
 from enum import IntEnum
 
 
-class Status(IntEnum):
+class SocksRep(IntEnum):
     SUCCEEDED = 0
     GENERAL_SOCKS_SERVER_FAILURE = 1
     CONNECTION_NOT_ALLOWED_BY_RULESET = 2
@@ -13,18 +13,18 @@ class Status(IntEnum):
     ADDRESS_TYPE_NOT_SUPPORTED = 8
 
 
-class AuthMethods(IntEnum):
+class SocksAuthMethod(IntEnum):
     NO_AUTH = 0
     PASSWORD_AUTH = 2
 
 
-class Command(IntEnum):
+class SocksCommand(IntEnum):
     CONNECT = 1
     BIND = 2
     UDP_ASSOCIATE = 3
 
 
-class Atyp(IntEnum):
+class SocksAtyp(IntEnum):
     IPV4 = 1
     DOMAIN = 3
     IPV6 = 4

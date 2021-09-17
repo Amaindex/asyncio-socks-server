@@ -17,8 +17,8 @@ from asyncio_socks_server.exceptions import (
     SocksException,
 )
 from asyncio_socks_server.logger import access_logger, error_logger, logger
-from asyncio_socks_server.utils import get_atyp_from_host
-from asyncio_socks_server.values import Atyp, Command, Status
+from asyncio_socks_server.utils import get_socks_atyp_from_host
+from asyncio_socks_server.values import SocksAtyp, SocksCommand, SocksRep
 
 
 class LocalTCP(asyncio.Protocol):
@@ -62,21 +62,21 @@ class LocalTCP(asyncio.Protocol):
 
     @staticmethod
     def gen_reply(
-        status: Status,
+        rep: SocksRep,
         bind_host: str = "0.0.0.0",
         bind_port: int = 0,
     ) -> bytes:
-        """Generate message for negotiation."""
+        """Generate reply for negotiation."""
 
         VER, RSV = b"\x05", b"\x00"
-        ATYP = get_atyp_from_host(bind_host)
-        if ATYP == Atyp.IPV4:
+        ATYP = get_socks_atyp_from_host(bind_host)
+        if ATYP == SocksAtyp.IPV4:
             BND_ADDR = inet_pton(AF_INET, bind_host)
-        elif ATYP == Atyp.IPV6:
+        elif ATYP == SocksAtyp.IPV6:
             BND_ADDR = inet_pton(AF_INET6, bind_host)
         else:
             BND_ADDR = len(bind_host).to_bytes(2, "big") + bind_host.encode("UTF-8")
-        REP = status.to_bytes(1, "big")
+        REP = rep.to_bytes(1, "big")
         ATYP = ATYP.to_bytes(1, "big")
         BND_PORT = int(bind_port).to_bytes(2, "big")
         return VER + REP + RSV + ATYP + BND_ADDR + BND_PORT
@@ -154,23 +154,25 @@ class LocalTCP(asyncio.Protocol):
             # Step 2.1
             # The client send a socks request.
             VER, CMD, RSV, ATYP = await self.stream_reader.readexactly(4)
-            if ATYP == Atyp.IPV4:
+            if ATYP == SocksAtyp.IPV4:
                 DST_ADDR = inet_ntop(AF_INET, await self.stream_reader.readexactly(4))
-            elif ATYP == Atyp.DOMAIN:
+            elif ATYP == SocksAtyp.DOMAIN:
                 domain_len = int.from_bytes(
                     await self.stream_reader.readexactly(1), "big"
                 )
                 DST_ADDR = (await self.stream_reader.readexactly(domain_len)).decode()
-            elif ATYP == Atyp.IPV6:
+            elif ATYP == SocksAtyp.IPV6:
                 DST_ADDR = inet_ntop(AF_INET6, await self.stream_reader.readexactly(16))
             else:
-                self.transport.write(self.gen_reply(Status.ADDRESS_TYPE_NOT_SUPPORTED))
+                self.transport.write(
+                    self.gen_reply(SocksRep.ADDRESS_TYPE_NOT_SUPPORTED)
+                )
                 raise NoAtypAllowed(f"Received unsupported ATYP value: {ATYP}")
             DST_PORT = int.from_bytes(await self.stream_reader.readexactly(2), "big")
 
             # Step 2.2
             # The server handles the command and returns a reply.
-            if CMD == Command.CONNECT:
+            if CMD == SocksCommand.CONNECT:
                 try:
                     loop = asyncio.get_event_loop()
                     task = loop.create_connection(
@@ -178,14 +180,14 @@ class LocalTCP(asyncio.Protocol):
                     )
                     _, remote_tcp = await asyncio.wait_for(task, 5)
                 except ConnectionRefusedError:
-                    self.transport.write(self.gen_reply(Status.CONNECTION_REFUSED))
+                    self.transport.write(self.gen_reply(SocksRep.CONNECTION_REFUSED))
                     raise CommandExecError("Connection was refused") from None
                 except socket.gaierror:
-                    self.transport.write(self.gen_reply(Status.HOST_UNREACHABLE))
+                    self.transport.write(self.gen_reply(SocksRep.HOST_UNREACHABLE))
                     raise CommandExecError("Host is unreachable") from None
                 except Exception:
                     self.transport.write(
-                        self.gen_reply(Status.GENERAL_SOCKS_SERVER_FAILURE)
+                        self.gen_reply(SocksRep.GENERAL_SOCKS_SERVER_FAILURE)
                     )
                     raise CommandExecError(
                         "General socks server failure occurred"
@@ -195,7 +197,7 @@ class LocalTCP(asyncio.Protocol):
                     BIND_ADDR = self.config.BIND_ADDR
                     _, BIND_PORT = self.transport.get_extra_info("sockname")
                     self.transport.write(
-                        self.gen_reply(Status.SUCCEEDED, BIND_ADDR, BIND_PORT)
+                        self.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
                     )
                     self.stage = self.STAGE_CONNECT
 
@@ -203,7 +205,7 @@ class LocalTCP(asyncio.Protocol):
                         f"Established TCP stream between"
                         f" {self.peername} and {self.remote_tcp.peername}"
                     )
-            elif CMD == Command.UDP_ASSOCIATE:
+            elif CMD == SocksCommand.UDP_ASSOCIATE:
                 try:
                     loop = asyncio.get_event_loop()
                     task = loop.create_datagram_endpoint(
@@ -213,7 +215,7 @@ class LocalTCP(asyncio.Protocol):
                     udp_transport, local_udp = await asyncio.wait_for(task, 5)
                 except Exception:
                     self.transport.write(
-                        self.gen_reply(Status.GENERAL_SOCKS_SERVER_FAILURE)
+                        self.gen_reply(SocksRep.GENERAL_SOCKS_SERVER_FAILURE)
                     )
                     raise CommandExecError(
                         "General socks server failure occurred"
@@ -223,7 +225,7 @@ class LocalTCP(asyncio.Protocol):
                     BIND_ADDR = self.config.BIND_ADDR
                     _, BIND_PORT = udp_transport.get_extra_info("sockname")
                     self.transport.write(
-                        self.gen_reply(Status.SUCCEEDED, BIND_ADDR, BIND_PORT)
+                        self.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
                     )
                     self.stage = self.STAGE_UDP_ASSOCIATE
 
@@ -232,7 +234,7 @@ class LocalTCP(asyncio.Protocol):
                         f"at {BIND_ADDR,BIND_PORT}"
                     )
             else:
-                self.transport.write(self.gen_reply(Status.COMMAND_NOT_SUPPORTED))
+                self.transport.write(self.gen_reply(SocksRep.COMMAND_NOT_SUPPORTED))
                 raise NoCommandAllowed(f"Unsupported CMD value: {CMD}")
 
         except (SocksException, ConnectionError, ValueError) as e:
@@ -359,16 +361,16 @@ class LocalUDP(asyncio.DatagramProtocol):
         length += 1
         ATYP = int.from_bytes(data[length : length + 1], "big")
         length += 1
-        if ATYP == Atyp.IPV4:
+        if ATYP == SocksAtyp.IPV4:
             ipv4 = data[length : length + 4]
             DST_ADDR = inet_ntop(AF_INET, ipv4)
             length += 4
-        elif ATYP == Atyp.DOMAIN:
+        elif ATYP == SocksAtyp.DOMAIN:
             addr_len = int.from_bytes(data[length : length + 1], byteorder="big")
             length += 1
             DST_ADDR = data[length : length + addr_len].decode()
             length += addr_len
-        elif ATYP == Atyp.IPV6:
+        elif ATYP == SocksAtyp.IPV6:
             ipv6 = data[length : length + 16]
             DST_ADDR = inet_ntop(AF_INET6, ipv6)
             length += 16
@@ -472,12 +474,12 @@ class RemoteUDP(asyncio.DatagramProtocol):
 
         RSV, FRAG = b"\x00\x00", b"\x00"
         remote_host, remote_port = remote_host_port
-        ATYP = get_atyp_from_host(remote_host)
-        if ATYP == Atyp.IPV4:
+        ATYP = get_socks_atyp_from_host(remote_host)
+        if ATYP == SocksAtyp.IPV4:
             DST_ADDR = inet_pton(AF_INET, remote_host)
-        elif ATYP == Atyp.IPV6:
+        elif ATYP == SocksAtyp.IPV6:
             DST_ADDR = inet_pton(AF_INET6, remote_host)
-        else:  # ATYP == Atyp.DOMAIN
+        else:  # ATYP == SocksAtyp.DOMAIN
             DST_ADDR = len(remote_host).to_bytes(1, "big") + remote_host.encode("UTF-8")
         ATYP = ATYP.to_bytes(1, "big")
         DST_PORT = remote_port.to_bytes(2, "big")

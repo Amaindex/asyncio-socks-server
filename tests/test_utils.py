@@ -5,30 +5,30 @@ import pytest
 
 from asyncio_socks_server.exceptions import LoadFileError
 from asyncio_socks_server.utils import (
-    get_atyp_from_host,
+    get_socks_atyp_from_host,
     load_dict_from_json_file_location,
 )
-from asyncio_socks_server.values import Atyp
+from asyncio_socks_server.values import SocksAtyp
 
 
 @pytest.mark.parametrize(
     "host,atyp",
     [
-        ("127.0.0.1", Atyp.IPV4),
-        ("1080:0:0:0:8:800:200C:417A", Atyp.IPV6),
-        ("1080::8:800:200C:417A", Atyp.IPV6),
-        ("FF01:0:0:0:0:0:0:101", Atyp.IPV6),
-        ("FF01::101", Atyp.IPV6),
-        ("0:0:0:0:0:0:0:1", Atyp.IPV6),
-        ("::1", Atyp.IPV6),
-        ("0:0:0:0:0:0:0:0", Atyp.IPV6),
-        ("::", Atyp.IPV6),
-        ("www.example.com", Atyp.DOMAIN),
-        ("???", Atyp.DOMAIN),
+        ("127.0.0.1", SocksAtyp.IPV4),
+        ("1080:0:0:0:8:800:200C:417A", SocksAtyp.IPV6),
+        ("1080::8:800:200C:417A", SocksAtyp.IPV6),
+        ("FF01:0:0:0:0:0:0:101", SocksAtyp.IPV6),
+        ("FF01::101", SocksAtyp.IPV6),
+        ("0:0:0:0:0:0:0:1", SocksAtyp.IPV6),
+        ("::1", SocksAtyp.IPV6),
+        ("0:0:0:0:0:0:0:0", SocksAtyp.IPV6),
+        ("::", SocksAtyp.IPV6),
+        ("www.example.com", SocksAtyp.DOMAIN),
+        ("???", SocksAtyp.DOMAIN),
     ],
 )
-def test_get_atyp_from_host(host, atyp):
-    assert get_atyp_from_host(host) == atyp
+def test_get_socks_atyp_from_host(host, atyp):
+    assert get_socks_atyp_from_host(host) == atyp
 
 
 def test_load_dict_from_json_file_location_with_non_existing_file():

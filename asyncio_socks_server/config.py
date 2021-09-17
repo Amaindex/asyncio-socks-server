@@ -3,7 +3,7 @@ from os import environ
 from typing import Any, Union
 
 from asyncio_socks_server.utils import load_dict_from_json_file_location, str_to_bool
-from asyncio_socks_server.values import AuthMethods
+from asyncio_socks_server.values import SocksAuthMethod
 
 SOCKS_SERVER_PREFIX = "AIOSS_"
 
@@ -17,7 +17,7 @@ BASE_LOGO = """
 DEFAULT_CONFIG = {
     "LISTEN_HOST": "0.0.0.0",
     "LISTEN_PORT": 1080,
-    "AUTH_METHOD": AuthMethods.NO_AUTH,
+    "AUTH_METHOD": SocksAuthMethod.NO_AUTH,
     "ACCESS_LOG": True,
     "STRICT": False,
     "DEBUG": True,

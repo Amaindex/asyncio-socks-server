@@ -1,23 +1,19 @@
 import pytest
 import asyncio
 from asyncio_socks_server.protocols import LocalTCP
-from asyncio_socks_server.values import AuthMethods
+from asyncio_socks_server.values import SocksAuthMethod
 from asyncio_socks_server.config import Config
 from asyncio_socks_server.authenticators import NoAuthenticator, PasswordAuthenticator
 from unittest.mock import Mock, call, patch
-from asyncio_socks_server.values import Status, Atyp
+from asyncio_socks_server.values import SocksRep, SocksAtyp
 from socket import inet_pton, AF_INET, AF_INET6, gaierror
-
-import warnings
-
-warnings.simplefilter("ignore")
 
 
 @pytest.mark.parametrize(
     "method,cls",
     [
-        (AuthMethods.NO_AUTH, NoAuthenticator),
-        (AuthMethods.PASSWORD_AUTH, PasswordAuthenticator),
+        (SocksAuthMethod.NO_AUTH, NoAuthenticator),
+        (SocksAuthMethod.PASSWORD_AUTH, PasswordAuthenticator),
     ],
 )
 def test_init_authenticator_cls(method, cls):
@@ -87,7 +83,7 @@ def test_negotiate_with_invalid_auth_method(mock_transport):
 
 def test_negotiate_with_wrong_username_password(mock_transport):
     config = Config()
-    config.AUTH_METHOD = AuthMethods.PASSWORD_AUTH
+    config.AUTH_METHOD = SocksAuthMethod.PASSWORD_AUTH
     UNAME = "name"
     PASSWD = "password"
     config.USERS = {UNAME: PASSWD}
@@ -146,25 +142,25 @@ def test_negotiate_with_invalid_atyp(local_tcp_after_no_auth):
 
     # NoAtypAllowed
     local_tcp_after_no_auth.transport.write.assert_called_with(
-        LocalTCP.gen_reply(Status.ADDRESS_TYPE_NOT_SUPPORTED)
+        LocalTCP.gen_reply(SocksRep.ADDRESS_TYPE_NOT_SUPPORTED)
     )
 
 
 @pytest.mark.parametrize(
     "exception,status",
     [
-        (ConnectionRefusedError, Status.CONNECTION_REFUSED),
-        (gaierror, Status.HOST_UNREACHABLE),
-        (asyncio.TimeoutError, Status.GENERAL_SOCKS_SERVER_FAILURE),
+        (ConnectionRefusedError, SocksRep.CONNECTION_REFUSED),
+        (gaierror, SocksRep.HOST_UNREACHABLE),
+        (asyncio.TimeoutError, SocksRep.GENERAL_SOCKS_SERVER_FAILURE),
     ],
 )
 def test_negotiate_with_connect_exceptions(
-    local_tcp_after_no_auth, exception, status: Status
+    local_tcp_after_no_auth, exception, status: SocksRep
 ):
 
     # VER, CMD, RSV = b"\x05\x01\x00"
     local_tcp_after_no_auth.data_received(b"\x05\x01\x00")
-    ATYP = Atyp.IPV4
+    ATYP = SocksAtyp.IPV4
     local_tcp_after_no_auth.data_received(int.to_bytes(ATYP, 1, "big"))
     # DST_ADDR, DST_PORT = "127.0.0.1", 80
     DST_ADDR = "127.0.0.1"
@@ -197,16 +193,16 @@ def test_negotiate_with_connect_exceptions(
 @pytest.mark.parametrize(
     "exception,status",
     [
-        (ConnectionRefusedError, Status.GENERAL_SOCKS_SERVER_FAILURE),
-        (asyncio.TimeoutError, Status.GENERAL_SOCKS_SERVER_FAILURE),
+        (ConnectionRefusedError, SocksRep.GENERAL_SOCKS_SERVER_FAILURE),
+        (asyncio.TimeoutError, SocksRep.GENERAL_SOCKS_SERVER_FAILURE),
     ],
 )
 def test_negotiate_with_udp_associate_exception(
-    local_tcp_after_no_auth, exception, status: Status
+    local_tcp_after_no_auth, exception, status: SocksRep
 ):
     # VER, CMD, RSV = b"\x05\x03\x00"
     local_tcp_after_no_auth.data_received(b"\x05\x03\x00")
-    ATYP = Atyp.IPV4
+    ATYP = SocksAtyp.IPV4
     local_tcp_after_no_auth.data_received(int.to_bytes(ATYP, 1, "big"))
     # DST_ADDR, DST_PORT = "0.0.0.0", 0
     DST_ADDR = "0.0.0.0"
@@ -239,7 +235,7 @@ def test_negotiate_with_udp_associate_exception(
 def test_negotiate_with_connect(local_tcp_after_no_auth):
     # VER, CMD, RSV = b"\x05\x01\x00"
     local_tcp_after_no_auth.data_received(b"\x05\x01\x00")
-    ATYP = Atyp.IPV4
+    ATYP = SocksAtyp.IPV4
     local_tcp_after_no_auth.data_received(int.to_bytes(ATYP, 1, "big"))
     # DST_ADDR, DST_PORT = "127.0.0.1", 80
     DST_ADDR = "127.0.0.1"
@@ -264,7 +260,7 @@ def test_negotiate_with_connect(local_tcp_after_no_auth):
     BIND_ADDR = local_tcp_after_no_auth.config.BIND_ADDR
     _, BIND_PORT = local_tcp_after_no_auth.transport.get_extra_info("sockname")
     local_tcp_after_no_auth.transport.write.assert_called_with(
-        LocalTCP.gen_reply(Status.SUCCEEDED, BIND_ADDR, BIND_PORT)
+        LocalTCP.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
     )
     assert local_tcp_after_no_auth.remote_tcp is mock_remote_tcp
 
@@ -272,7 +268,7 @@ def test_negotiate_with_connect(local_tcp_after_no_auth):
 def test_negotiate_with_udp_associate(local_tcp_after_no_auth):
     # VER, CMD, RSV = b"\x05\x03\x00"
     local_tcp_after_no_auth.data_received(b"\x05\x03\x00")
-    ATYP = Atyp.IPV4
+    ATYP = SocksAtyp.IPV4
     local_tcp_after_no_auth.data_received(int.to_bytes(ATYP, 1, "big"))
     # DST_ADDR, DST_PORT = "0.0.0.0", 0
     DST_ADDR = "0.0.0.0"
@@ -299,7 +295,7 @@ def test_negotiate_with_udp_associate(local_tcp_after_no_auth):
     BIND_ADDR = local_tcp_after_no_auth.config.BIND_ADDR
     _, BIND_PORT = mock_local_udp_transport.get_extra_info("sockname")
     local_tcp_after_no_auth.transport.write.assert_called_with(
-        LocalTCP.gen_reply(Status.SUCCEEDED, BIND_ADDR, BIND_PORT)
+        LocalTCP.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
     )
     assert local_tcp_after_no_auth.local_udp is mock_local_udp
 
@@ -307,7 +303,7 @@ def test_negotiate_with_udp_associate(local_tcp_after_no_auth):
 @pytest.fixture()
 def local_tcp_after_username_password_auth(mock_transport):
     config = Config()
-    config.AUTH_METHOD = AuthMethods.PASSWORD_AUTH
+    config.AUTH_METHOD = SocksAuthMethod.PASSWORD_AUTH
     UNAME = "name"
     PASSWD = "password"
     config.USERS = {UNAME: PASSWD}
@@ -337,7 +333,7 @@ def test_negotiate_with_connect_and_username_password_auth(
 ):
     # VER, CMD, RSV = b"\x05\x01\x00"
     local_tcp_after_username_password_auth.data_received(b"\x05\x01\x00")
-    ATYP = Atyp.IPV4
+    ATYP = SocksAtyp.IPV4
     local_tcp_after_username_password_auth.data_received(int.to_bytes(ATYP, 1, "big"))
     # DST_ADDR, DST_PORT = "127.0.0.1", 80
     DST_ADDR = "127.0.0.1"
@@ -368,9 +364,10 @@ def test_negotiate_with_connect_and_username_password_auth(
         "sockname"
     )
     local_tcp_after_username_password_auth.transport.write.assert_called_with(
-        LocalTCP.gen_reply(Status.SUCCEEDED, BIND_ADDR, BIND_PORT)
+        LocalTCP.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
     )
     assert local_tcp_after_username_password_auth.remote_tcp is mock_remote_tcp
+
 
 def test_data_received_with_connect(mock_transport):
     config = Config()
@@ -384,6 +381,7 @@ def test_data_received_with_connect(mock_transport):
 
     local_tcp.remote_tcp.write.assert_called_with(data)
 
+
 def test_data_received_with_udp_associate(mock_transport):
     config = Config()
     local_tcp = LocalTCP(config)
@@ -395,6 +393,7 @@ def test_data_received_with_udp_associate(mock_transport):
     local_tcp.data_received(data)
 
     local_tcp.remote_tcp.write.assert_not_called()
+
 
 def test_connection_lost():
     config = Config()
