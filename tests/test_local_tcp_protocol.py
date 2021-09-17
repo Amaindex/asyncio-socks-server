@@ -256,17 +256,13 @@ def test_negotiate_with_connect(local_tcp_after_no_auth):
 
     mock_remote_tcp = Mock()
     mock_wait_for.return_value = (None, mock_remote_tcp)
-    asyncio.get_event_loop().run_until_complete(
-        local_tcp_after_no_auth.negotiate_task
-    )
+    asyncio.get_event_loop().run_until_complete(local_tcp_after_no_auth.negotiate_task)
 
     # patcher_create_connection.stop()
     # patcher_wait_for.stop()
 
     BIND_ADDR = local_tcp_after_no_auth.config.BIND_ADDR
-    _, BIND_PORT = local_tcp_after_no_auth.transport.get_extra_info(
-        "sockname"
-    )
+    _, BIND_PORT = local_tcp_after_no_auth.transport.get_extra_info("sockname")
     local_tcp_after_no_auth.transport.write.assert_called_with(
         LocalTCP.gen_reply(Status.SUCCEEDED, BIND_ADDR, BIND_PORT)
     )
@@ -295,22 +291,17 @@ def test_negotiate_with_udp_associate(local_tcp_after_no_auth):
     mock_local_udp_transport = Mock()
     mock_local_udp_transport.get_extra_info = Mock(return_value=("0.0.0.0", 0))
     mock_wait_for.return_value = (mock_local_udp_transport, mock_local_udp)
-    asyncio.get_event_loop().run_until_complete(
-        local_tcp_after_no_auth.negotiate_task
-    )
+    asyncio.get_event_loop().run_until_complete(local_tcp_after_no_auth.negotiate_task)
 
     # patcher_create_connection.stop()
     # patcher_wait_for.stop()
 
     BIND_ADDR = local_tcp_after_no_auth.config.BIND_ADDR
-    _, BIND_PORT = mock_local_udp_transport.get_extra_info(
-        "sockname"
-    )
+    _, BIND_PORT = mock_local_udp_transport.get_extra_info("sockname")
     local_tcp_after_no_auth.transport.write.assert_called_with(
         LocalTCP.gen_reply(Status.SUCCEEDED, BIND_ADDR, BIND_PORT)
     )
     assert local_tcp_after_no_auth.local_udp is mock_local_udp
-
 
 
 @pytest.fixture()
@@ -341,7 +332,9 @@ def local_tcp_after_username_password_auth(mock_transport):
     return local_tcp
 
 
-def test_negotiate_with_connect_and_username_password_auth(local_tcp_after_username_password_auth):
+def test_negotiate_with_connect_and_username_password_auth(
+    local_tcp_after_username_password_auth,
+):
     # VER, CMD, RSV = b"\x05\x01\x00"
     local_tcp_after_username_password_auth.data_received(b"\x05\x01\x00")
     ATYP = Atyp.IPV4
@@ -350,7 +343,9 @@ def test_negotiate_with_connect_and_username_password_auth(local_tcp_after_usern
     DST_ADDR = "127.0.0.1"
     local_tcp_after_username_password_auth.data_received(inet_pton(AF_INET, DST_ADDR))
     DST_PORT = 80
-    local_tcp_after_username_password_auth.data_received(int.to_bytes(DST_PORT, 2, "big"))
+    local_tcp_after_username_password_auth.data_received(
+        int.to_bytes(DST_PORT, 2, "big")
+    )
 
     loop = asyncio.get_event_loop()
     patcher_create_connection = patch.object(loop, "create_connection")
@@ -377,3 +372,44 @@ def test_negotiate_with_connect_and_username_password_auth(local_tcp_after_usern
     )
     assert local_tcp_after_username_password_auth.remote_tcp is mock_remote_tcp
 
+def test_data_received_with_connect(mock_transport):
+    config = Config()
+    local_tcp = LocalTCP(config)
+
+    local_tcp.stage = local_tcp.STAGE_CONNECT
+    local_tcp.remote_tcp = Mock()
+
+    data = "hello world".encode()
+    local_tcp.data_received(data)
+
+    local_tcp.remote_tcp.write.assert_called_with(data)
+
+def test_data_received_with_udp_associate(mock_transport):
+    config = Config()
+    local_tcp = LocalTCP(config)
+
+    local_tcp.stage = local_tcp.STAGE_UDP_ASSOCIATE
+    local_tcp.remote_tcp = Mock()
+
+    data = "hello world".encode()
+    local_tcp.data_received(data)
+
+    local_tcp.remote_tcp.write.assert_not_called()
+
+def test_connection_lost():
+    config = Config()
+    local_tcp = LocalTCP(config)
+
+    local_tcp.stage = local_tcp.STAGE_CONNECT
+    local_tcp.negotiate_task = Mock()
+    local_tcp.transport = Mock()
+    local_tcp.remote_tcp = Mock()
+    local_tcp.local_udp = Mock()
+
+    local_tcp.connection_lost(None)
+
+    assert local_tcp.stage == local_tcp.STAGE_DESTROY
+    local_tcp.negotiate_task.cancel.assert_called()
+    local_tcp.transport.close.assert_called()
+    local_tcp.remote_tcp.close.assert_called()
+    local_tcp.local_udp.close.assert_called()
