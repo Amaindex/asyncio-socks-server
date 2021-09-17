@@ -4,8 +4,13 @@ from asyncio_socks_server.protocols import LocalTCP
 from asyncio_socks_server.values import AuthMethods
 from asyncio_socks_server.config import Config
 from asyncio_socks_server.authenticators import NoAuthenticator, PasswordAuthenticator
+from unittest.mock import Mock, call, patch
+from asyncio_socks_server.values import Status, Atyp
+from socket import inet_pton, AF_INET, AF_INET6, gaierror
 
-from unittest.mock import Mock, call
+import warnings
+
+warnings.simplefilter("ignore")
 
 
 @pytest.mark.parametrize(
@@ -49,15 +54,16 @@ def test_negotiate_with_invalid_socks_version(mock_transport):
     local_tcp = LocalTCP(config)
     local_tcp.connection_made(mock_transport)
 
+    # Invalid version
     # VER, NMETHODS = b"\x06\x02"
     local_tcp.data_received(b"\x06\x02")
 
-    with pytest.raises( asyncio.exceptions.CancelledError):
+    with pytest.raises(asyncio.exceptions.CancelledError):
         asyncio.get_event_loop().run_until_complete(local_tcp.negotiate_task)
 
     # NoVersionAllowed
     calls = [call(b"\x05\xff")]
-    mock_transport.write.assert_has_calls(calls)
+    local_tcp.transport.write.assert_has_calls(calls)
 
 
 def test_negotiate_with_invalid_auth_method(mock_transport):
@@ -67,6 +73,7 @@ def test_negotiate_with_invalid_auth_method(mock_transport):
 
     # VER, NMETHODS = b"\x05\x02"
     local_tcp.data_received(b"\x05\x02")
+    # Invalid methods
     # METHOD1, METHOD2 = b"\xFD\xFE"
     local_tcp.data_received(b"\xFD\xFE")
 
@@ -75,13 +82,15 @@ def test_negotiate_with_invalid_auth_method(mock_transport):
 
     # NoAuthMethodAllowed
     calls = [call(b"\x05\xff")]
-    mock_transport.write.assert_has_calls(calls)
+    local_tcp.transport.write.assert_has_calls(calls)
 
 
 def test_negotiate_with_wrong_username_password(mock_transport):
     config = Config()
     config.AUTH_METHOD = AuthMethods.PASSWORD_AUTH
-    config.USERS = {"name": "password"}
+    UNAME = "name"
+    PASSWD = "password"
+    config.USERS = {UNAME: PASSWD}
     local_tcp = LocalTCP(config)
     local_tcp.connection_made(mock_transport)
 
@@ -90,21 +99,281 @@ def test_negotiate_with_wrong_username_password(mock_transport):
     # METHOD1, METHOD2 = b"\x00\x02"
     local_tcp.data_received(b"\x00\x02")
 
-    UNAME = "wrong_name".encode("ASCII")
-    PASSWD = "wrong_password".encode("ASCII")
+    # Wrong name and password
+    # VER, WULEN, WUNAME, WPLEN, WPASSWD
     VER = b"\x01"
+    WUNAME = "wrong_name".encode("ASCII")
+    WPASSWD = "wrong_password".encode("ASCII")
     local_tcp.data_received(
         VER
-        + int.to_bytes(len(UNAME), 1, "big")
-        + UNAME
-        + int.to_bytes(len(UNAME), 1, "big")
-        + PASSWD
-        + int.to_bytes(len(PASSWD), 1, "big")
+        + int.to_bytes(len(WUNAME), 1, "big")
+        + WUNAME
+        + int.to_bytes(len(WPASSWD), 1, "big")
+        + WPASSWD
     )
 
     with pytest.raises(asyncio.exceptions.CancelledError):
         asyncio.get_event_loop().run_until_complete(local_tcp.negotiate_task)
 
     # AuthenticationError
-    calls = [call(b"\x05\02"),call(b"\x01\x01")]
-    mock_transport.write.assert_has_calls(calls)
+    calls = [call(b"\x05\02"), call(b"\x01\x01")]
+    local_tcp.transport.write.assert_has_calls(calls)
+
+
+@pytest.fixture()
+def local_tcp_after_no_auth(mock_transport):
+    config = Config()
+    local_tcp = LocalTCP(config)
+    local_tcp.connection_made(mock_transport)
+
+    # VER, NMETHODS = b"\x05\x01"
+    local_tcp.data_received(b"\x05\x01")
+    # METHOD = b"\x00"
+    local_tcp.data_received(b"\x00")
+
+    return local_tcp
+
+
+def test_negotiate_with_invalid_atyp(local_tcp_after_no_auth):
+    # Invalid address type
+    # VER, CMD, RSV, ATYP = b"\x05\x01\x00\xff"
+    local_tcp_after_no_auth.data_received(b"\x05\x01\x00\xff")
+
+    with pytest.raises(asyncio.exceptions.CancelledError):
+        asyncio.get_event_loop().run_until_complete(
+            local_tcp_after_no_auth.negotiate_task
+        )
+
+    # NoAtypAllowed
+    local_tcp_after_no_auth.transport.write.assert_called_with(
+        LocalTCP.gen_reply(Status.ADDRESS_TYPE_NOT_SUPPORTED)
+    )
+
+
+@pytest.mark.parametrize(
+    "exception,status",
+    [
+        (ConnectionRefusedError, Status.CONNECTION_REFUSED),
+        (gaierror, Status.HOST_UNREACHABLE),
+        (asyncio.TimeoutError, Status.GENERAL_SOCKS_SERVER_FAILURE),
+    ],
+)
+def test_negotiate_with_connect_exceptions(
+    local_tcp_after_no_auth, exception, status: Status
+):
+
+    # VER, CMD, RSV = b"\x05\x01\x00"
+    local_tcp_after_no_auth.data_received(b"\x05\x01\x00")
+    ATYP = Atyp.IPV4
+    local_tcp_after_no_auth.data_received(int.to_bytes(ATYP, 1, "big"))
+    # DST_ADDR, DST_PORT = "127.0.0.1", 80
+    DST_ADDR = "127.0.0.1"
+    local_tcp_after_no_auth.data_received(inet_pton(AF_INET, DST_ADDR))
+    DST_PORT = 80
+    local_tcp_after_no_auth.data_received(int.to_bytes(DST_PORT, 2, "big"))
+
+    loop = asyncio.get_event_loop()
+    patcher_create_connection = patch.object(loop, "create_connection")
+    mock_create_connection = patcher_create_connection.start()
+
+    async def mock_create_connection_task():
+        raise exception
+
+    mock_create_connection.return_value = loop.create_task(
+        mock_create_connection_task()
+    )
+    with pytest.raises(asyncio.exceptions.CancelledError):
+        asyncio.get_event_loop().run_until_complete(
+            local_tcp_after_no_auth.negotiate_task
+        )
+
+    # patcher_create_connection.stop()
+
+    local_tcp_after_no_auth.transport.write.assert_called_with(
+        LocalTCP.gen_reply(status)
+    )
+
+
+@pytest.mark.parametrize(
+    "exception,status",
+    [
+        (ConnectionRefusedError, Status.GENERAL_SOCKS_SERVER_FAILURE),
+        (asyncio.TimeoutError, Status.GENERAL_SOCKS_SERVER_FAILURE),
+    ],
+)
+def test_negotiate_with_udp_associate_exception(
+    local_tcp_after_no_auth, exception, status: Status
+):
+    # VER, CMD, RSV = b"\x05\x03\x00"
+    local_tcp_after_no_auth.data_received(b"\x05\x03\x00")
+    ATYP = Atyp.IPV4
+    local_tcp_after_no_auth.data_received(int.to_bytes(ATYP, 1, "big"))
+    # DST_ADDR, DST_PORT = "0.0.0.0", 0
+    DST_ADDR = "0.0.0.0"
+    local_tcp_after_no_auth.data_received(inet_pton(AF_INET, DST_ADDR))
+    DST_PORT = 0
+    local_tcp_after_no_auth.data_received(int.to_bytes(DST_PORT, 2, "big"))
+
+    loop = asyncio.get_event_loop()
+    patcher_create_datagram_endpoint = patch.object(loop, "create_datagram_endpoint")
+    mock_create_datagram_endpoint = patcher_create_datagram_endpoint.start()
+
+    async def mock_create_datagram_endpoint_task():
+        raise exception
+
+    mock_create_datagram_endpoint.return_value = loop.create_task(
+        mock_create_datagram_endpoint_task()
+    )
+    with pytest.raises(asyncio.exceptions.CancelledError):
+        asyncio.get_event_loop().run_until_complete(
+            local_tcp_after_no_auth.negotiate_task
+        )
+
+    # patcher_create_datagram_endpoint.stop()
+
+    local_tcp_after_no_auth.transport.write.assert_called_with(
+        LocalTCP.gen_reply(status)
+    )
+
+
+def test_negotiate_with_connect(local_tcp_after_no_auth):
+    # VER, CMD, RSV = b"\x05\x01\x00"
+    local_tcp_after_no_auth.data_received(b"\x05\x01\x00")
+    ATYP = Atyp.IPV4
+    local_tcp_after_no_auth.data_received(int.to_bytes(ATYP, 1, "big"))
+    # DST_ADDR, DST_PORT = "127.0.0.1", 80
+    DST_ADDR = "127.0.0.1"
+    local_tcp_after_no_auth.data_received(inet_pton(AF_INET, DST_ADDR))
+    DST_PORT = 80
+    local_tcp_after_no_auth.data_received(int.to_bytes(DST_PORT, 2, "big"))
+
+    loop = asyncio.get_event_loop()
+    patcher_create_connection = patch.object(loop, "create_connection")
+    patcher_wait_for = patch("asyncio.wait_for")
+
+    patcher_create_connection.start()
+    mock_wait_for = patcher_wait_for.start()
+
+    mock_remote_tcp = Mock()
+    mock_wait_for.return_value = (None, mock_remote_tcp)
+    asyncio.get_event_loop().run_until_complete(
+        local_tcp_after_no_auth.negotiate_task
+    )
+
+    # patcher_create_connection.stop()
+    # patcher_wait_for.stop()
+
+    BIND_ADDR = local_tcp_after_no_auth.config.BIND_ADDR
+    _, BIND_PORT = local_tcp_after_no_auth.transport.get_extra_info(
+        "sockname"
+    )
+    local_tcp_after_no_auth.transport.write.assert_called_with(
+        LocalTCP.gen_reply(Status.SUCCEEDED, BIND_ADDR, BIND_PORT)
+    )
+    assert local_tcp_after_no_auth.remote_tcp is mock_remote_tcp
+
+
+def test_negotiate_with_udp_associate(local_tcp_after_no_auth):
+    # VER, CMD, RSV = b"\x05\x03\x00"
+    local_tcp_after_no_auth.data_received(b"\x05\x03\x00")
+    ATYP = Atyp.IPV4
+    local_tcp_after_no_auth.data_received(int.to_bytes(ATYP, 1, "big"))
+    # DST_ADDR, DST_PORT = "0.0.0.0", 0
+    DST_ADDR = "0.0.0.0"
+    local_tcp_after_no_auth.data_received(inet_pton(AF_INET, DST_ADDR))
+    DST_PORT = 0
+    local_tcp_after_no_auth.data_received(int.to_bytes(DST_PORT, 2, "big"))
+
+    loop = asyncio.get_event_loop()
+    patcher_create_datagram_endpoint = patch.object(loop, "create_datagram_endpoint")
+    patcher_wait_for = patch("asyncio.wait_for")
+
+    patcher_create_datagram_endpoint.start()
+    mock_wait_for = patcher_wait_for.start()
+
+    mock_local_udp = Mock()
+    mock_local_udp_transport = Mock()
+    mock_local_udp_transport.get_extra_info = Mock(return_value=("0.0.0.0", 0))
+    mock_wait_for.return_value = (mock_local_udp_transport, mock_local_udp)
+    asyncio.get_event_loop().run_until_complete(
+        local_tcp_after_no_auth.negotiate_task
+    )
+
+    # patcher_create_connection.stop()
+    # patcher_wait_for.stop()
+
+    BIND_ADDR = local_tcp_after_no_auth.config.BIND_ADDR
+    _, BIND_PORT = mock_local_udp_transport.get_extra_info(
+        "sockname"
+    )
+    local_tcp_after_no_auth.transport.write.assert_called_with(
+        LocalTCP.gen_reply(Status.SUCCEEDED, BIND_ADDR, BIND_PORT)
+    )
+    assert local_tcp_after_no_auth.local_udp is mock_local_udp
+
+
+
+@pytest.fixture()
+def local_tcp_after_username_password_auth(mock_transport):
+    config = Config()
+    config.AUTH_METHOD = AuthMethods.PASSWORD_AUTH
+    UNAME = "name"
+    PASSWD = "password"
+    config.USERS = {UNAME: PASSWD}
+    local_tcp = LocalTCP(config)
+    local_tcp.connection_made(mock_transport)
+
+    # VER, NMETHODS = b"\x05\x02"
+    local_tcp.data_received(b"\x05\x02")
+    # METHOD1, METHOD2 = b"\x00\x02"
+    local_tcp.data_received(b"\x00\x02")
+
+    # VER, ULEN, UNAME, PLEN, PASSWD
+    VER = b"\x01"
+    local_tcp.data_received(
+        VER
+        + int.to_bytes(len(UNAME.encode("ASCII")), 1, "big")
+        + UNAME.encode("ASCII")
+        + int.to_bytes(len(PASSWD.encode("ASCII")), 1, "big")
+        + PASSWD.encode("ASCII")
+    )
+
+    return local_tcp
+
+
+def test_negotiate_with_connect_and_username_password_auth(local_tcp_after_username_password_auth):
+    # VER, CMD, RSV = b"\x05\x01\x00"
+    local_tcp_after_username_password_auth.data_received(b"\x05\x01\x00")
+    ATYP = Atyp.IPV4
+    local_tcp_after_username_password_auth.data_received(int.to_bytes(ATYP, 1, "big"))
+    # DST_ADDR, DST_PORT = "127.0.0.1", 80
+    DST_ADDR = "127.0.0.1"
+    local_tcp_after_username_password_auth.data_received(inet_pton(AF_INET, DST_ADDR))
+    DST_PORT = 80
+    local_tcp_after_username_password_auth.data_received(int.to_bytes(DST_PORT, 2, "big"))
+
+    loop = asyncio.get_event_loop()
+    patcher_create_connection = patch.object(loop, "create_connection")
+    patcher_wait_for = patch("asyncio.wait_for")
+
+    patcher_create_connection.start()
+    mock_wait_for = patcher_wait_for.start()
+
+    mock_remote_tcp = Mock()
+    mock_wait_for.return_value = (None, mock_remote_tcp)
+    asyncio.get_event_loop().run_until_complete(
+        local_tcp_after_username_password_auth.negotiate_task
+    )
+
+    # patcher_create_connection.stop()
+    # patcher_wait_for.stop()
+
+    BIND_ADDR = local_tcp_after_username_password_auth.config.BIND_ADDR
+    _, BIND_PORT = local_tcp_after_username_password_auth.transport.get_extra_info(
+        "sockname"
+    )
+    local_tcp_after_username_password_auth.transport.write.assert_called_with(
+        LocalTCP.gen_reply(Status.SUCCEEDED, BIND_ADDR, BIND_PORT)
+    )
+    assert local_tcp_after_username_password_auth.remote_tcp is mock_remote_tcp
+
