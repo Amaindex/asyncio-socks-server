@@ -3,7 +3,7 @@ import asyncio
 from asyncio_socks_server.protocols import LocalTCP
 from asyncio_socks_server.values import SocksAuthMethod
 from asyncio_socks_server.config import Config
-from asyncio_socks_server.authenticators import NoAuthenticator, PasswordAuthenticator
+from asyncio_socks_server.authenticators import NoAuthenticator, UPAuthenticator
 from unittest.mock import Mock, call, patch
 from asyncio_socks_server.values import SocksRep, SocksAtyp
 from socket import inet_pton, AF_INET, AF_INET6, gaierror
@@ -13,7 +13,7 @@ from socket import inet_pton, AF_INET, AF_INET6, gaierror
     "method,cls",
     [
         (SocksAuthMethod.NO_AUTH, NoAuthenticator),
-        (SocksAuthMethod.PASSWORD_AUTH, PasswordAuthenticator),
+        (SocksAuthMethod.UP_AUTH, UPAuthenticator),
     ],
 )
 def test_init_authenticator_cls(method, cls):
@@ -83,7 +83,7 @@ def test_negotiate_with_invalid_auth_method(mock_transport):
 
 def test_negotiate_with_wrong_username_password(mock_transport):
     config = Config()
-    config.AUTH_METHOD = SocksAuthMethod.PASSWORD_AUTH
+    config.AUTH_METHOD = SocksAuthMethod.UP_AUTH
     UNAME = "name"
     PASSWD = "password"
     config.USERS = {UNAME: PASSWD}
@@ -303,7 +303,7 @@ def test_negotiate_with_udp_associate(local_tcp_after_no_auth):
 @pytest.fixture()
 def local_tcp_after_username_password_auth(mock_transport):
     config = Config()
-    config.AUTH_METHOD = SocksAuthMethod.PASSWORD_AUTH
+    config.AUTH_METHOD = SocksAuthMethod.UP_AUTH
     UNAME = "name"
     PASSWD = "password"
     config.USERS = {UNAME: PASSWD}

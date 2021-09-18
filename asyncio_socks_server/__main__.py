@@ -98,7 +98,8 @@ def main():
         dest="path",
         type=str,
         default=None,
-        help="Path to the config file in json format.\n" "Example: ./config.json",
+        help="Path to the config file in json format.\n"
+        "Example: ./${ENV}/config.json",
     )
 
     parser.add_argument(

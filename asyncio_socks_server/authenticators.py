@@ -58,10 +58,10 @@ class NoAuthenticator(BaseAuthenticator):
         pass
 
 
-class PasswordAuthenticator(BaseAuthenticator):
+class UPAuthenticator(BaseAuthenticator):
     """Username/Password Authentication for SOCKS V5. Find more detail in RFC1929."""
 
-    METHOD = SocksAuthMethod.PASSWORD_AUTH
+    METHOD = SocksAuthMethod.UP_AUTH
 
     def verify_user(self, username: str, password: str) -> bool:
         try:
@@ -119,4 +119,4 @@ class PasswordAuthenticator(BaseAuthenticator):
             raise AuthenticationError("USERNAME or PASSWORD is uncorrected")
 
 
-AUTHENTICATORS_CLS_LIST = [NoAuthenticator, PasswordAuthenticator]
+AUTHENTICATORS_CLS_LIST = [NoAuthenticator, UPAuthenticator]

@@ -15,7 +15,7 @@ class SocksRep(IntEnum):
 
 class SocksAuthMethod(IntEnum):
     NO_AUTH = 0
-    PASSWORD_AUTH = 2
+    UP_AUTH = 2
 
 
 class SocksCommand(IntEnum):
