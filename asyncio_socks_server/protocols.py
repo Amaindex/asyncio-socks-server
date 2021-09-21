@@ -210,7 +210,7 @@ class LocalTCP(asyncio.Protocol):
                     loop = asyncio.get_event_loop()
                     task = loop.create_datagram_endpoint(
                         lambda: LocalUDP((DST_ADDR, DST_PORT), self.config),
-                        local_addr=("0.0.0.0", 0),
+                        local_addr=(self.config.LISTEN_HOST, 0),
                     )
                     udp_transport, local_udp = await asyncio.wait_for(task, 5)
                 except Exception:

@@ -1,6 +1,7 @@
 import argparse
 from argparse import RawTextHelpFormatter
 
+from asyncio_socks_server.__version__ import __version__
 from asyncio_socks_server.app import SocksServer
 from asyncio_socks_server.config import BASE_LOGO, SOCKS_SERVER_PREFIX, Config
 from asyncio_socks_server.logger import logger
@@ -30,7 +31,7 @@ def main():
         "-v",
         "--version",
         action="version",
-        version=f"version 1.0.0.1",
+        version=f"version {__version__}",
         help="Show program's version number and exit.\n ",
     )
 
@@ -39,7 +40,7 @@ def main():
         "--host",
         dest="host",
         type=str,
-        default="0.0.0.0",
+        default=None,
         help="Host address to listen (default 0.0.0.0).",
     )
 
@@ -48,7 +49,7 @@ def main():
         "--port",
         dest="port",
         type=int,
-        default=1080,
+        default=None,
         help="Port to listen (default 1080).",
     )
 
@@ -57,7 +58,7 @@ def main():
         "--auth",
         dest="method",
         type=int,
-        default=0,
+        default=None,
         help=(
             "Authentication method (default 0).\n"
             "Possible values: "
@@ -67,20 +68,26 @@ def main():
     )
 
     parser.add_argument(
-        "--access-logs",
+        "--access-log",
         dest="access_log",
-        help="Display access logs.",
+        help="Display access log.",
+        default=None,
         action="store_true",
     )
 
     parser.add_argument(
-        "--debug", dest="debug", help="Work in debug mode.", action="store_true"
+        "--debug",
+        dest="debug",
+        help="Work in debug mode.",
+        default=None,
+        action="store_true",
     )
 
     parser.add_argument(
         "--strict",
         dest="strict",
         help="Work in strict compliance with RFC1928 and RFC1929.",
+        default=None,
         action="store_true",
     )
 
@@ -88,18 +95,9 @@ def main():
         "--bind-addr",
         dest="bind_addr",
         type=str,
-        default="0.0.0.0",
+        default=None,
         help="Value of BIND.ADDR field in the reply (default 0.0.0.0).\n"
         "It is not necessary for most clients.\n ",
-    )
-
-    parser.add_argument(
-        "--config",
-        dest="path",
-        type=str,
-        default=None,
-        help="Path to the config file in json format.\n"
-        "Example: ./${ENV}/config.json",
     )
 
     parser.add_argument(
@@ -109,6 +107,15 @@ def main():
         default=SOCKS_SERVER_PREFIX,
         help=f"Prefix of the environment variable to be loaded as the config \n"
         f"(default is {SOCKS_SERVER_PREFIX}).",
+    )
+
+    parser.add_argument(
+        "--config",
+        dest="path",
+        type=str,
+        default=None,
+        help="Path to the config file in json format.\n"
+        "Example: ./${ENV}/config.json",
     )
 
     args = parser.parse_args()
@@ -123,7 +130,11 @@ def main():
         "BIND_ADDR": args.bind_addr,
     }
 
-    app = SocksServer(config=args.path, env_prefix=args.env_prefix, **config_args)
+    app = SocksServer(
+        config=args.path,
+        env_prefix=args.env_prefix,
+        **{k: v for k, v in config_args.items() if v is not None},
+    )
     app.run()
 
 
