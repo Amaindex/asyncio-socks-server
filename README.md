@@ -11,7 +11,7 @@ A SOCKS proxy server implemented with the powerful python cooperative concurrenc
 - Driven by the python standard library, no third-party dependencies
 
 ## Installation
-Install with pip if Python 3.8.0 or higher is available.
+Install with pip if Python version 3.8.0 or higher is available.
 ```shell
 pip install asyncio-socks-server
 ```
@@ -21,7 +21,7 @@ When installed, you can invoke asyncio_socks_server from the command-line:
 ```shell
 asyncio_socks_server [-h] [-v] 
                      [-H HOST] [-P PORT] [-A METHOD] 
-                     [--access-logs] [--debug] [--strict] 
+                     [--access-log] [--debug] [--strict] 
                      [--bind-addr BIND_ADDR]
                      [--env-prefix ENV_PREFIX]
                      [--config PATH]
@@ -35,18 +35,18 @@ where:
 - `-P PORT`, `--port PORT`: Port to listen (default 1080).
 - `-A METHOD`, `--auth METHOD`: Authentication method (default 0). 
   Possible values: 0 (no auth), 2 (username/password auth)
-- `--access-logs`: Display access logs.
+- `--access-log`: Display access log.
 - `--debug`: Work in debug mode.
 - `--strict`: Work in strict compliance with RFC1928 and RFC1929.
 - `--bind-addr BIND_ADDR`: Value of BIND.ADDR field in the reply (default 0.0.0.0).
   It is not necessary for most clients.
-  
-If the value of METHOD is 2, that is, when the username/password authentication 
-is specified, you need to provide a config file containing the user password 
-in json format with `--config` option.
+
+If the value of `METHOD` is 2, that is, when the username/password authentication 
+is specified, you need to provide a config file containing the usernames and passwords 
+in json format with the `--config` option.
 You can also list other options in the config file instead of the command：
 
-`config.json:`
+`config.json`:
 ```json
 {
   "LISTEN_HOST": "0.0.0.0",
@@ -68,16 +68,90 @@ You can also list other options in the config file instead of the command：
 asyncio_socks_server --config ${ENV}/config.json
 ```
 In addition, any environment variable named starting with `AIOSS_` will also be applied 
-to the config. 
-You can also change the prefix by specifying `--env-prefix` option，for example:
+to the option. 
+The prefix can be changed by specifying the `--env-prefix` option，for example:
 ```shell
 export MY_LISTEN_HOST=127.0.0.1
-export MY_LISTEN_PORT=8848
-
+export MY_LISTEN_PORT=9999
 asyncio_socks_server --env-prefix MY_
 ```
 
+**NOTE:** The loading order of the options is: config file, environment variables, command options. 
+The latter will overwrite the former if options are given in multiple ways.
+
+## Strict Mode
+
+For various reasons, asyncio-socks-server has made some compromises on the 
+Implementation details of the protocols. Therefore, in the following scenes, 
+asyncio-socks-server’s behavior will be divergent from that described in RFC1928 
+and RFC1929.
+
+### asyncio-socks-server relays all UDP datagrams
+
+In the SOCKS5 negotiation, a UDP ASSOCIATE request formed as follows is used to 
+establish an association within the UDP relay process to handle UDP datagrams:
+```text
++----+-----+-------+------+----------+----------+
+|VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
++----+-----+-------+------+----------+----------+
+| 1  |  1  | X'00' |  1   | Variable |    2     |
++----+-----+-------+------+----------+----------+
+```
+Normally, the DST.ADDR and DST.PORT fields should contain the address and port that the 
+client expects to use to send UDP datagrams on for the association, or use a port number 
+and address of all zeros if the client does not possess this information. 
+
+However, some non-standard clients did not implement this principle correctly, but used 
+a private address as DST.ADDR and DST.PORT due to the NAT. To deal with this, in 
+non-strict mode, asyncio-socks-server relays all UDP datagrams it receives instead of 
+using DST.ADDR and DST.PORT to limit the access.
+
+
+### asyncio-socks-server allows "V5" username/password authentication
+
+Once the client selects the username/password authentication during negotiation, 
+it will conduct a sub-negotiation with the server. This sub-negotiation begins with 
+the client producing a request:
+```text
++----+------+----------+------+----------+
+|VER | ULEN |  UNAME   | PLEN |  PASSWD  |
++----+------+----------+------+----------+
+| 1  |  1   | 1 to 255 |  1   | 1 to 255 |
++----+------+----------+------+----------+
+```
+The VER field contains the current version of the sub-negotiation, which is X'01' but
+often considered as X'05' since it's a bit counter-intuitive. 
+So asyncio-socks-server allows requests with VER X'05' in non-strict mode.
+
+### `--strict` option
+
+To disable the compromise described above, you can specify the `--strict` option:
+```shell
+asyncio_socks_server --strict
+```
+
+### `--bind-addr` option
+
+At the end of the negotiation, the server returns a reply formed as follows:
+```text
++----+-----+-------+------+----------+----------+
+|VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
++----+-----+-------+------+----------+----------+
+| 1  |  1  | X'00' |  1   | Variable |    2     |
++----+-----+-------+------+----------+----------+
+```
+For multi-homed servers, the BND.ADDR may be different from the address that the 
+client uses to reach the server. However, this field is not necessary for most clients, because
+they assume that the relay server is on the same host as the proxy server 
+(it's right, for asyncio-socks-server) so they can just use the address of the latter.
+But if you want the clients running in "strict mode" to work properly, 
+you need to specify this field explicitly with `--bind-addr` option:
+```shell
+asyncio_socks_server --host 0.0.0.0 --bind-addr www.bindaddress.com
+```
+
 ## Reference
+
 - [RFC1928](https://www.ietf.org/rfc/rfc1928.txt)
 - [RFC1929](https://www.ietf.org/rfc/rfc1929.txt)
 - [Anorov/PySocks](https://github.com/Anorov/PySocks)
