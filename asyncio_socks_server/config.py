@@ -8,19 +8,21 @@ from asyncio_socks_server.values import SocksAuthMethod
 SOCKS_SERVER_PREFIX = "AIOSS_"
 
 BASE_LOGO = """
-
-            A Socks Server 
-        Implemented With Asyncio.
-
-"""
+0                 |─| |─| |                  0
+01                | |─| |─|                 10
+01011          A Socks Server            10100
+010101010           0101             110010100  
+01010      Implemented With Asyncio      11010
+01                |─| |─| |                 01
+0                 | |─| |─|                  0"""
 
 DEFAULT_CONFIG = {
     "LISTEN_HOST": "0.0.0.0",
     "LISTEN_PORT": 1080,
     "AUTH_METHOD": SocksAuthMethod.NO_AUTH,
-    "ACCESS_LOG": True,
+    "ACCESS_LOG": False,
     "STRICT": False,
-    "DEBUG": True,
+    "DEBUG": False,
     "BIND_ADDR": "0.0.0.0",
     "USERS": {},
 }
