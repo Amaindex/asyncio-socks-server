@@ -178,7 +178,7 @@ class LocalTCP(asyncio.Protocol):
                     task = loop.create_connection(
                         lambda: RemoteTCP(self, self.config), DST_ADDR, DST_PORT
                     )
-                    _, remote_tcp = await asyncio.wait_for(task, 5)
+                    remote_tcp_transport, remote_tcp = await asyncio.wait_for(task, 5)
                 except ConnectionRefusedError:
                     self.transport.write(self.gen_reply(SocksRep.CONNECTION_REFUSED))
                     raise CommandExecError("Connection was refused") from None
@@ -195,7 +195,7 @@ class LocalTCP(asyncio.Protocol):
                 else:
                     self.remote_tcp = remote_tcp
                     BIND_ADDR = self.config.BIND_ADDR
-                    _, BIND_PORT = self.transport.get_extra_info("sockname")
+                    _, BIND_PORT = remote_tcp_transport.get_extra_info("sockname")
                     self.transport.write(
                         self.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
                     )
@@ -212,7 +212,7 @@ class LocalTCP(asyncio.Protocol):
                         lambda: LocalUDP((DST_ADDR, DST_PORT), self.config),
                         local_addr=(self.config.LISTEN_HOST, 0),
                     )
-                    udp_transport, local_udp = await asyncio.wait_for(task, 5)
+                    local_udp_transport, local_udp = await asyncio.wait_for(task, 5)
                 except Exception:
                     self.transport.write(
                         self.gen_reply(SocksRep.GENERAL_SOCKS_SERVER_FAILURE)
@@ -223,7 +223,7 @@ class LocalTCP(asyncio.Protocol):
                 else:
                     self.local_udp = local_udp
                     BIND_ADDR = self.config.BIND_ADDR
-                    _, BIND_PORT = udp_transport.get_extra_info("sockname")
+                    _, BIND_PORT = local_udp_transport.get_extra_info("sockname")
                     self.transport.write(
                         self.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
                     )
