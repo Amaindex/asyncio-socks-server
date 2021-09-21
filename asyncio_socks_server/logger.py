@@ -45,12 +45,12 @@ def gen_log_config(config: Config):
         },
         "formatters": {
             "generic": {
-                "format": "%(asctime)s %(levelname)-8s %(message)s",
+                "format": "%(asctime)s | %(levelname)-8s | %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S %z",
                 "class": "logging.Formatter",
             },
             "diagnostic": {
-                "format": "%(asctime)s [%(name)s] [%(levelname)s] [%(filename)s:%(lineno)d] \n└─%(message)s\n",
+                "format": "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d \n└─%(message)s\n",
                 "datefmt": "%Y-%m-%d %H:%M:%S %z",
                 "class": "logging.Formatter",
             },
