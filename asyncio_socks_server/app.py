@@ -37,7 +37,7 @@ class SocksServer:
         self.proxyman = ProxyMan(self.config)
 
     async def shut_down(self):
-        logger.info("Waiting for background tasks to cancel (CTRL+C to force quit)")
+        logger.info("Waiting for background tasks to cancel")
 
         await self.proxyman.close_server()
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
@@ -54,7 +54,6 @@ class SocksServer:
                 s, lambda s=s: asyncio.create_task(self.shut_down())
             )
 
-        logger.debug(BASE_LOGO)
         logger.info(
             f"Server launched on" f" {self.config.LISTEN_HOST,self.config.LISTEN_PORT}"
         )
