@@ -1,5 +1,10 @@
 # asyncio-socks-server
 
+![Latest version](https://img.shields.io/pypi/v/asyncio-socks-server?color=537CDE&label=Latest&logo=pypi&logoColor=white)
+![Build](https://img.shields.io/github/workflow/status/Amaindex/asyncio-socks-server/Release?color=89E0A3&label=Build&logo=github&logoColor=white)
+![Image](https://img.shields.io/github/workflow/status/Amaindex/asyncio-socks-server/Image?color=89E0A3&label=Image&logo=github&logoColor=white)
+![Tests](https://img.shields.io/github/workflow/status/Amaindex/asyncio-socks-server/Tests?color=89E0A3&label=Tests&logo=github)
+![Build](https://img.shields.io/docker/image-size/amaindex/asyncio-socks-server?color=F29CF2&logo=docker&logoColor=white&sort=semver)
 
 A SOCKS proxy server implemented with the powerful python cooperative concurrency framework **asyncio**. 
 
@@ -16,8 +21,13 @@ Install with pip if Python version 3.8.0 or higher is available.
 pip install asyncio-socks-server
 ```
 
+Or pull a docker image from the [Docker Hub registry](https://hub.docker.com/repository/docker/amaindex/asyncio-socks-server).
+```shell
+docker pull amaindex/asyncio-socks-server
+```
+
 ## Usage
-When installed, you can invoke asyncio_socks_server from the command-line:
+When installed with pip, you can invoke asyncio-socks-server from the command-line:
 ```shell
 asyncio_socks_server [-h] [-v] 
                      [-H HOST] [-P PORT] [-A METHOD] 
@@ -78,6 +88,26 @@ asyncio_socks_server --env-prefix MY_
 
 **NOTE:** The loading order of the options is: config file, environment variables, command options. 
 The latter will overwrite the former if options are given in multiple ways.
+
+Alternatively, if you use the docker image, you can launch the asyncio-socks-server with the following command:
+```shell
+docker run amaindex/asyncio-socks-server [-h] [-v] 
+                                         [-H HOST] [-P PORT] [-A METHOD] 
+                                         [--access-log] [--debug] [--strict] 
+                                         [--bind-addr BIND_ADDR]
+                                         [--env-prefix ENV_PREFIX]
+                                         [--config PATH]
+```
+The network mode `host` is recommended since asyncio-socks-server uses multiple ports dynamically. 
+If you also want to provide a config file, it should be mounted manually.
+```shell
+docker run \
+    --rm \
+    --net=host \
+    -v /host/path/config.json:/config.json \ 
+    amaindex/asyncio-socks-server \
+    --config /config.json
+```
 
 ## Strict Mode
 
