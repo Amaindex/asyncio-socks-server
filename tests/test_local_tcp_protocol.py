@@ -1,12 +1,13 @@
-import pytest
 import asyncio
-from asyncio_socks_server.protocols import LocalTCP
-from asyncio_socks_server.values import SocksAuthMethod
-from asyncio_socks_server.config import Config
-from asyncio_socks_server.authenticators import NoAuthenticator, UPAuthenticator
+from socket import AF_INET, AF_INET6, gaierror, inet_pton
 from unittest.mock import Mock, call, patch
-from asyncio_socks_server.values import SocksRep, SocksAtyp
-from socket import inet_pton, AF_INET, AF_INET6, gaierror
+
+import pytest
+
+from asyncio_socks_server.authenticators import NoAuthenticator, UPAuthenticator
+from asyncio_socks_server.config import Config
+from asyncio_socks_server.protocols import LocalTCP
+from asyncio_socks_server.values import SocksAtyp, SocksAuthMethod, SocksRep
 
 
 @pytest.mark.parametrize(
@@ -251,14 +252,16 @@ def test_negotiate_with_connect(local_tcp_after_no_auth):
     mock_wait_for = patcher_wait_for.start()
 
     mock_remote_tcp = Mock()
-    mock_wait_for.return_value = (None, mock_remote_tcp)
+    mock_remote_tcp_transport = Mock()
+    mock_remote_tcp_transport.get_extra_info = Mock(return_value=("0.0.0.0", 9999))
+    mock_wait_for.return_value = (mock_remote_tcp_transport, mock_remote_tcp)
     asyncio.get_event_loop().run_until_complete(local_tcp_after_no_auth.negotiate_task)
 
     # patcher_create_connection.stop()
     # patcher_wait_for.stop()
 
     BIND_ADDR = local_tcp_after_no_auth.config.BIND_ADDR
-    _, BIND_PORT = local_tcp_after_no_auth.transport.get_extra_info("sockname")
+    _, BIND_PORT = mock_remote_tcp_transport.get_extra_info("sockname")
     local_tcp_after_no_auth.transport.write.assert_called_with(
         LocalTCP.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
     )
@@ -351,7 +354,9 @@ def test_negotiate_with_connect_and_username_password_auth(
     mock_wait_for = patcher_wait_for.start()
 
     mock_remote_tcp = Mock()
-    mock_wait_for.return_value = (None, mock_remote_tcp)
+    mock_remote_tcp_transport = Mock()
+    mock_remote_tcp_transport.get_extra_info = Mock(return_value=("0.0.0.0", 9999))
+    mock_wait_for.return_value = (mock_remote_tcp_transport, mock_remote_tcp)
     asyncio.get_event_loop().run_until_complete(
         local_tcp_after_username_password_auth.negotiate_task
     )
@@ -360,9 +365,7 @@ def test_negotiate_with_connect_and_username_password_auth(
     # patcher_wait_for.stop()
 
     BIND_ADDR = local_tcp_after_username_password_auth.config.BIND_ADDR
-    _, BIND_PORT = local_tcp_after_username_password_auth.transport.get_extra_info(
-        "sockname"
-    )
+    _, BIND_PORT = mock_remote_tcp_transport.get_extra_info("sockname")
     local_tcp_after_username_password_auth.transport.write.assert_called_with(
         LocalTCP.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
     )
