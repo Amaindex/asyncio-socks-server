@@ -1,0 +1,18 @@
+name: Image
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  new-images:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: Publish to Registry
+      uses: elgohr/Publish-Docker-Github-Action@master
+      with:
+        name: amaindex/asyncio-socks-server
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_PASSWORD }}
+        tags: "latest,${{ github.event.release.tag_name }}"
