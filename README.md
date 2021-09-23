@@ -39,8 +39,8 @@ asyncio_socks_server [-h] [-v]
 where:
 
 - `asyncio_socks_server`: You could use python -m asyncio_socks_server in development.
-- `h`, `--help`: Show a help message and exit.
-- `v`, `--version`: Show program's version number and exit.
+- `-h`, `--help`: Show a help message and exit.
+- `-v`, `--version`: Show program's version number and exit.
 - `-H HOST`, `--host HOST`: Host address to listen (default 0.0.0.0).
 - `-P PORT`, `--port PORT`: Port to listen (default 1080).
 - `-A METHOD`, `--auth METHOD`: Authentication method (default 0). 
