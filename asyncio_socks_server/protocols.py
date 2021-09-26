@@ -194,7 +194,9 @@ class LocalTCP(asyncio.Protocol):
                     ) from None
                 else:
                     self.remote_tcp = remote_tcp
-                    bind_addr , bind_port = remote_tcp_transport.get_extra_info("sockname")
+                    bind_addr, bind_port = remote_tcp_transport.get_extra_info(
+                        "sockname"
+                    )
                     self.transport.write(
                         self.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
                     )
@@ -221,7 +223,9 @@ class LocalTCP(asyncio.Protocol):
                     ) from None
                 else:
                     self.local_udp = local_udp
-                    bind_addr, bind_port = local_udp_transport.get_extra_info("sockname")
+                    bind_addr, bind_port = local_udp_transport.get_extra_info(
+                        "sockname"
+                    )
                     self.transport.write(
                         self.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
                     )
@@ -251,6 +255,15 @@ class LocalTCP(asyncio.Protocol):
 
     def eof_received(self):
         self.close()
+
+    def pause_writing(self) -> None:
+        try:
+            self.remote_tcp.transport.pause_reading()
+        except AttributeError:
+            pass
+
+    def resume_writing(self) -> None:
+        self.remote_tcp.transport.resume_reading()
 
     def connection_lost(self, exc: Optional[Exception]) -> None:
         self.close()
@@ -296,6 +309,15 @@ class RemoteTCP(asyncio.Protocol):
 
     def eof_received(self):
         self.close()
+
+    def pause_writing(self) -> None:
+        try:
+            self.local_tcp.transport.pause_reading()
+        except AttributeError:
+            pass
+
+    def resume_writing(self) -> None:
+        self.local_tcp.transport.resume_reading()
 
     def connection_lost(self, exc):
         self.close()
