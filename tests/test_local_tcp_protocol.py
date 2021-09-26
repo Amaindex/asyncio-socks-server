@@ -260,10 +260,9 @@ def test_negotiate_with_connect(local_tcp_after_no_auth):
     # patcher_create_connection.stop()
     # patcher_wait_for.stop()
 
-    BIND_ADDR = local_tcp_after_no_auth.config.BIND_ADDR
-    _, BIND_PORT = mock_remote_tcp_transport.get_extra_info("sockname")
+    bind_addr, bind_port = mock_remote_tcp_transport.get_extra_info("sockname")
     local_tcp_after_no_auth.transport.write.assert_called_with(
-        LocalTCP.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
+        LocalTCP.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
     )
     assert local_tcp_after_no_auth.remote_tcp is mock_remote_tcp
 
@@ -295,10 +294,9 @@ def test_negotiate_with_udp_associate(local_tcp_after_no_auth):
     # patcher_create_connection.stop()
     # patcher_wait_for.stop()
 
-    BIND_ADDR = local_tcp_after_no_auth.config.BIND_ADDR
-    _, BIND_PORT = mock_local_udp_transport.get_extra_info("sockname")
+    bind_addr, bind_port = mock_local_udp_transport.get_extra_info("sockname")
     local_tcp_after_no_auth.transport.write.assert_called_with(
-        LocalTCP.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
+        LocalTCP.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
     )
     assert local_tcp_after_no_auth.local_udp is mock_local_udp
 
@@ -364,10 +362,9 @@ def test_negotiate_with_connect_and_username_password_auth(
     # patcher_create_connection.stop()
     # patcher_wait_for.stop()
 
-    BIND_ADDR = local_tcp_after_username_password_auth.config.BIND_ADDR
-    _, BIND_PORT = mock_remote_tcp_transport.get_extra_info("sockname")
+    bind_addr, bind_port = mock_remote_tcp_transport.get_extra_info("sockname")
     local_tcp_after_username_password_auth.transport.write.assert_called_with(
-        LocalTCP.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
+        LocalTCP.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
     )
     assert local_tcp_after_username_password_auth.remote_tcp is mock_remote_tcp
 

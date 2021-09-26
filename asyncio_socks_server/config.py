@@ -23,7 +23,6 @@ DEFAULT_CONFIG = {
     "ACCESS_LOG": False,
     "STRICT": False,
     "DEBUG": False,
-    "BIND_ADDR": "0.0.0.0",
     "USERS": {},
 }
 
@@ -35,7 +34,6 @@ class Config(dict):
     ACCESS_LOG: bool
     STRICT: bool
     DEBUG: bool
-    BIND_ADDR: str
     USERS: dict
 
     def __init__(self):

@@ -86,18 +86,9 @@ def main():
     parser.add_argument(
         "--strict",
         dest="strict",
-        help="Work in strict compliance with RFC1928 and RFC1929.",
+        help="Work in strict compliance with RFC1928 and RFC1929.\n ",
         default=None,
         action="store_true",
-    )
-
-    parser.add_argument(
-        "--bind-addr",
-        dest="bind_addr",
-        type=str,
-        default=None,
-        help="Value of BIND.ADDR field in the reply (default 0.0.0.0).\n"
-        "It is not necessary for most clients.\n ",
     )
 
     parser.add_argument(
@@ -127,7 +118,6 @@ def main():
         "ACCESS_LOG": args.access_log,
         "DEBUG": args.debug,
         "STRICT": args.strict,
-        "BIND_ADDR": args.bind_addr,
     }
 
     app = SocksServer(

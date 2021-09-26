@@ -194,10 +194,9 @@ class LocalTCP(asyncio.Protocol):
                     ) from None
                 else:
                     self.remote_tcp = remote_tcp
-                    BIND_ADDR = self.config.BIND_ADDR
-                    _, BIND_PORT = remote_tcp_transport.get_extra_info("sockname")
+                    bind_addr , bind_port = remote_tcp_transport.get_extra_info("sockname")
                     self.transport.write(
-                        self.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
+                        self.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
                     )
                     self.stage = self.STAGE_CONNECT
 
@@ -222,16 +221,15 @@ class LocalTCP(asyncio.Protocol):
                     ) from None
                 else:
                     self.local_udp = local_udp
-                    BIND_ADDR = self.config.BIND_ADDR
-                    _, BIND_PORT = local_udp_transport.get_extra_info("sockname")
+                    bind_addr, bind_port = local_udp_transport.get_extra_info("sockname")
                     self.transport.write(
-                        self.gen_reply(SocksRep.SUCCEEDED, BIND_ADDR, BIND_PORT)
+                        self.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
                     )
                     self.stage = self.STAGE_UDP_ASSOCIATE
 
                     self.config.ACCESS_LOG and access_logger.info(
                         f"Established UDP relay for {self.peername} "
-                        f"at {BIND_ADDR,BIND_PORT}"
+                        f"at {bind_addr,bind_port}"
                     )
             else:
                 self.transport.write(self.gen_reply(SocksRep.COMMAND_NOT_SUPPORTED))
