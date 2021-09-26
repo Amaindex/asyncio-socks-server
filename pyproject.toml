@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "asyncio-socks-server"
-version = "0.2.0"
+version = "0.3.0"
 description = "A socks server implemented with asyncio."
 authors = ["Amaindex <amaindex@outlook.com>"]
 license = "MIT"
