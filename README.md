@@ -21,7 +21,7 @@ Install with pip if Python version 3.8.0 or higher is available.
 pip install asyncio-socks-server
 ```
 
-Or pull a docker image from the [Docker Hub registry](https://hub.docker.com/repository/docker/amaindex/asyncio-socks-server).
+Or pull a docker image from the [Docker Hub registry](https://hub.docker.com/r/amaindex/asyncio-socks-server).
 ```shell
 docker pull amaindex/asyncio-socks-server
 ```
@@ -131,7 +131,7 @@ Normally, the DST.ADDR and DST.PORT fields should contain the address and port t
 client expects to use to send UDP datagrams on for the association, or use a port number 
 and address of all zeros if the client does not possess this information. 
 
-However, some non-standard clients did not implement this principle correctly, but used 
+However, some non-standard clients did not follow this principle correctly, but used 
 a private address as DST.ADDR and DST.PORT due to the NAT. To deal with this, in 
 non-strict mode, asyncio-socks-server relays all UDP datagrams it receives instead of 
 using DST.ADDR and DST.PORT to limit the access.
