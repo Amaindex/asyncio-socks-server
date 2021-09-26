@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 import socket
 from asyncio.streams import StreamReader
 from socket import AF_INET, AF_INET6, inet_ntop, inet_pton
@@ -403,11 +404,13 @@ class LocalUDP(asyncio.DatagramProtocol):
         return RSV, FRAG, ATYP, DST_ADDR, DST_PORT, length
 
     def datagram_received(self, data: bytes, local_host_port: Tuple[str, int]):
-        cond1 = self.host_port_limit in (("0.0.0.0", 0), ("::", 0))
-        cond2 = self.host_port_limit == local_host_port
-        cond3 = self.config.STRICT == False
-        if not (cond1 or cond2 or cond3):
+        cond1 = self.host_port_limit in itertools.product(
+            ("0.0.0.0", "::", local_host_port[0]), (0, local_host_port[1])
+        )
+        cond2 = self.config.STRICT == False
+        if not cond1 and not cond2:
             return
+
         loop = asyncio.get_event_loop()
         loop.create_task(self.relay_task(data, local_host_port))
 
