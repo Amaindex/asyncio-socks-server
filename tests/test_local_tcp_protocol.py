@@ -395,7 +395,22 @@ def test_data_received_with_udp_associate(mock_transport):
     local_tcp.remote_tcp.write.assert_not_called()
 
 
-def test_connection_lost():
+def test_flow_control():
+    config = Config()
+    local_tcp = LocalTCP(config)
+
+    local_tcp.stage = local_tcp.STAGE_CONNECT
+    local_tcp.remote_tcp = Mock()
+    local_tcp.remote_tcp.transport = Mock()
+
+    local_tcp.pause_writing()
+    local_tcp.remote_tcp.transport.pause_reading.assert_called()
+
+    local_tcp.resume_writing()
+    local_tcp.remote_tcp.transport.resume_reading.assert_called()
+
+
+def test_close():
     config = Config()
     local_tcp = LocalTCP(config)
 
@@ -405,7 +420,7 @@ def test_connection_lost():
     local_tcp.remote_tcp = Mock()
     local_tcp.local_udp = Mock()
 
-    local_tcp.connection_lost(None)
+    local_tcp.close()
 
     assert local_tcp.stage == local_tcp.STAGE_DESTROY
     local_tcp.negotiate_task.cancel.assert_called()
