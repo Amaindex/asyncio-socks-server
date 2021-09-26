@@ -32,7 +32,6 @@ When installed with pip, you can invoke asyncio-socks-server from the command-li
 asyncio_socks_server [-h] [-v] 
                      [-H HOST] [-P PORT] [-A METHOD] 
                      [--access-log] [--debug] [--strict] 
-                     [--bind-addr BIND_ADDR]
                      [--env-prefix ENV_PREFIX]
                      [--config PATH]
 ```
@@ -48,8 +47,6 @@ where:
 - `--access-log`: Display access log.
 - `--debug`: Work in debug mode.
 - `--strict`: Work in strict compliance with RFC1928 and RFC1929.
-- `--bind-addr BIND_ADDR`: Value of BIND.ADDR field in the reply (default 0.0.0.0).
-  It is not necessary for most clients.
 
 If the value of `METHOD` is 2, that is, when the username/password authentication 
 is specified, you need to provide a config file containing the usernames and passwords 
@@ -65,7 +62,6 @@ You can also list other options in the config file instead of the command：
   "ACCESS_LOG": true,
   "DEBUG": true,
   "STRICT": true,
-  "BIND_HOST": "0.0.0.0",
   "USERS": {
     "username1": "password1",
     "username2": "password2",
@@ -94,7 +90,6 @@ Alternatively, if you use the docker image, you can launch the asyncio-socks-ser
 docker run amaindex/asyncio-socks-server [-h] [-v] 
                                          [-H HOST] [-P PORT] [-A METHOD] 
                                          [--access-log] [--debug] [--strict] 
-                                         [--bind-addr BIND_ADDR]
                                          [--env-prefix ENV_PREFIX]
                                          [--config PATH]
 ```
@@ -116,7 +111,7 @@ Implementation details of the protocols. Therefore, in the following scenes,
 asyncio-socks-server’s behavior will be divergent from that described in RFC1928 
 and RFC1929.
 
-### asyncio-socks-server relays all UDP datagrams
+### asyncio-socks-server relays all UDP datagrams by default
 
 In the SOCKS5 negotiation, a UDP ASSOCIATE request formed as follows is used to 
 establish an association within the UDP relay process to handle UDP datagrams:
@@ -127,14 +122,13 @@ establish an association within the UDP relay process to handle UDP datagrams:
 | 1  |  1  | X'00' |  1   | Variable |    2     |
 +----+-----+-------+------+----------+----------+
 ```
-Normally, the DST.ADDR and DST.PORT fields should contain the address and port that the 
+Normally, the DST.ADDR and DST.PORT fields contain the address and port that the 
 client expects to use to send UDP datagrams on for the association, or use a port number 
 and address of all zeros if the client does not possess this information. 
-
-However, some non-standard clients did not follow this principle correctly, but used 
-a private address as DST.ADDR and DST.PORT due to the NAT. To deal with this, in 
-non-strict mode, asyncio-socks-server relays all UDP datagrams it receives instead of 
-using DST.ADDR and DST.PORT to limit the access.
+Therefore, when the client is working in a network that uses NAT, the DST.ADDR 
+with all zeros should be used to avoid errors. But in case some clients 
+did not follow this principle correctly, asyncio-socks-server relays all UDP datagrams 
+it receives by default instead of using DST.ADDR and DST.PORT to limit the access.
 
 
 ### asyncio-socks-server allows "V5" username/password authentication
@@ -158,26 +152,6 @@ So asyncio-socks-server allows requests with VER X'05' in non-strict mode.
 To disable the compromise described above, you can specify the `--strict` option:
 ```shell
 asyncio_socks_server --strict
-```
-
-### `--bind-addr` option
-
-At the end of the negotiation, the server returns a reply formed as follows:
-```text
-+----+-----+-------+------+----------+----------+
-|VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
-+----+-----+-------+------+----------+----------+
-| 1  |  1  | X'00' |  1   | Variable |    2     |
-+----+-----+-------+------+----------+----------+
-```
-For multi-homed servers, the BND.ADDR may be different from the address that the 
-client uses to reach the server. However, this field is not necessary for most clients, because
-they assume that the relay server is on the same host as the proxy server 
-(it's right, for asyncio-socks-server) so they can just use the address of the latter.
-But if you want the clients running in "strict mode" to work properly, 
-you need to specify this field explicitly with `--bind-addr` option:
-```shell
-asyncio_socks_server --host 0.0.0.0 --bind-addr www.bindaddress.com
 ```
 
 ## Reference
