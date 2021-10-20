@@ -339,7 +339,7 @@ class LocalUDP(asyncio.DatagramProtocol):
         self.config = config
         self.transport = None
         self.sockname = None
-        self.remote_udp_table = {}
+        self.udp_map = {} # local_host_port -> remote_udp
         self.is_closing = False
 
     def write(self, data, port_addr):
@@ -423,15 +423,15 @@ class LocalUDP(asyncio.DatagramProtocol):
                 header_length,
             ) = self.parse_udp_request_header(data)
 
-            if local_host_port not in self.remote_udp_table:
+            if local_host_port not in self.udp_map:
                 loop = asyncio.get_event_loop()
                 task = loop.create_datagram_endpoint(
                     lambda: RemoteUDP(self, local_host_port, self.config),
                     local_addr=("0.0.0.0", 0),
                 )
                 _, remote_udp = await asyncio.wait_for(task, 5)
-                self.remote_udp_table[local_host_port] = remote_udp
-            remote_udp = self.remote_udp_table[local_host_port]
+                self.udp_map[local_host_port] = remote_udp
+            remote_udp = self.udp_map[local_host_port]
             remote_udp.write(data[header_length:], (DST_ADDR, DST_PORT))
         except Exception as e:
             error_logger.warning(
@@ -444,8 +444,8 @@ class LocalUDP(asyncio.DatagramProtocol):
             return
         self.is_closing = True
         self.transport and self.transport.close()
-        for local_host_port in self.remote_udp_table:
-            self.remote_udp_table[local_host_port].close()
+        for local_host_port in self.udp_map:
+            self.udp_map[local_host_port].close()
 
         self.config.ACCESS_LOG and access_logger.debug(
             f"Closed LocalUDP endpoint at {self.sockname}"
