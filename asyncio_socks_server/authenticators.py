@@ -1,3 +1,4 @@
+import asyncio
 from asyncio.streams import StreamReader
 from asyncio.transports import WriteTransport
 
@@ -16,9 +17,18 @@ class BaseAuthenticator:
         write_transport: WriteTransport,
         config: Config,
     ):
-        self._stream_reader = stream_reader
-        self._write_transport = write_transport
-        self._config = config
+        self.stream_reader = stream_reader
+        self.write_transport = write_transport
+        self.config = config
+
+    async def wf_readexactly(self, n):
+        return await asyncio.wait_for(
+            self.stream_reader.readexactly(n), timeout=self.config.SOCKET_TIMEOUT
+        )
+
+    def write(self, data):
+        if not self.write_transport.is_closing():
+            self.write_transport.write(data)
 
     def select_method(self, methods: set) -> int:
         """Select a available method from a set
@@ -65,7 +75,7 @@ class UPAuthenticator(BaseAuthenticator):
 
     def verify_user(self, username: str, password: str) -> bool:
         try:
-            return (username, password) in self._config.USERS.items()
+            return (username, password) in self.config.USERS.items()
         except AttributeError:
             raise AttributeError("Can not parse Config.USERS") from None
 
@@ -99,23 +109,23 @@ class UPAuthenticator(BaseAuthenticator):
 
         # Some clients use 5 as the version number of the Username/Password
         # authentication request, so we allow it in non-strict mode.
-        VER = await self._stream_reader.readexactly(1)
+        VER = await self.wf_readexactly(1)
         cond1 = VER == b"\x01"
-        cond2 = VER == b"\x05" and not self._config.STRICT
+        cond2 = VER == b"\x05" and not self.config.STRICT
         if not (cond1 or cond2):
-            self._write_transport.write(b"\x01\x01")
+            self.write(b"\x01\x01")
             raise AuthenticationError(
                 f"Received unsupported user/password authentication version {VER}"
             )
 
-        ULEN = int.from_bytes(await self._stream_reader.readexactly(1), "big")
-        UNAME = (await self._stream_reader.readexactly(ULEN)).decode("ASCII")
-        PLEN = int.from_bytes(await self._stream_reader.readexactly(1), "big")
-        PASSWD = (await self._stream_reader.readexactly(PLEN)).decode("ASCII")
+        ULEN = int.from_bytes(await self.wf_readexactly(1), "big")
+        UNAME = (await self.wf_readexactly(ULEN)).decode("ASCII")
+        PLEN = int.from_bytes(await self.stream_reader.readexactly(1), "big")
+        PASSWD = (await self.wf_readexactly(PLEN)).decode("ASCII")
         if self.verify_user(UNAME, PASSWD):
-            self._write_transport.write(b"\x01\x00")
+            self.write(b"\x01\x00")
         else:
-            self._write_transport.write(b"\x01\x01")
+            self.write(b"\x01\x01")
             raise AuthenticationError("USERNAME or PASSWORD is uncorrected")
 
 

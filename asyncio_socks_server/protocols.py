@@ -45,6 +45,16 @@ class LocalTCP(asyncio.Protocol):
             if cls.METHOD == self.config.AUTH_METHOD:
                 self.authenticator_cls = cls
 
+    async def wf_readexactly(self, n):
+        return await asyncio.wait_for(
+            self.stream_reader.readexactly(n), timeout=self.config.SOCKET_TIMEOUT
+        )
+
+    async def wf_readuntil(self, s):
+        return await asyncio.wait_for(
+            self.stream_reader.readuntil(s), timeout=self.config.SOCKET_TIMEOUT
+        )
+
     def write(self, data):
         if not self.transport.is_closing():
             self.transport.write(data)
@@ -132,11 +142,11 @@ class LocalTCP(asyncio.Protocol):
         try:
             # Step 1.1
             # The client sends a version identifier/method selection message.
-            VER, NMETHODS = await self.stream_reader.readexactly(2)
+            VER, NMETHODS = await self.wf_readexactly(2)
             if VER != 5:
-                self.transport.write(b"\x05\xff")
+                self.write(b"\x05\xff")
                 raise NoVersionAllowed(f"Received unsupported socks version: {VER}")
-            METHODS = set(await self.stream_reader.readexactly(NMETHODS))
+            METHODS = set(await self.wf_readexactly(NMETHODS))
 
             # Step 1.2
             # The server selects a method and sends selection message.
@@ -144,7 +154,7 @@ class LocalTCP(asyncio.Protocol):
                 self.stream_reader, self.transport, self.config
             )
             METHOD = authenticator.select_method(METHODS)
-            self.transport.write(b"\x05" + METHOD.to_bytes(1, "big"))
+            self.write(b"\x05" + METHOD.to_bytes(1, "big"))
             if METHOD == 0xFF:
                 raise NoAuthMethodAllowed("No authentication method is available")
 
@@ -154,22 +164,18 @@ class LocalTCP(asyncio.Protocol):
 
             # Step 2.1
             # The client send a socks request.
-            VER, CMD, RSV, ATYP = await self.stream_reader.readexactly(4)
+            VER, CMD, RSV, ATYP = await self.wf_readexactly(4)
             if ATYP == SocksAtyp.IPV4:
-                DST_ADDR = inet_ntop(AF_INET, await self.stream_reader.readexactly(4))
+                DST_ADDR = inet_ntop(AF_INET, await self.wf_readexactly(4))
             elif ATYP == SocksAtyp.DOMAIN:
-                domain_len = int.from_bytes(
-                    await self.stream_reader.readexactly(1), "big"
-                )
-                DST_ADDR = (await self.stream_reader.readexactly(domain_len)).decode()
+                domain_len = int.from_bytes(await self.wf_readexactly(1), "big")
+                DST_ADDR = (await self.wf_readexactly(domain_len)).decode()
             elif ATYP == SocksAtyp.IPV6:
-                DST_ADDR = inet_ntop(AF_INET6, await self.stream_reader.readexactly(16))
+                DST_ADDR = inet_ntop(AF_INET6, await self.wf_readexactly(16))
             else:
-                self.transport.write(
-                    self.gen_reply(SocksRep.ADDRESS_TYPE_NOT_SUPPORTED)
-                )
+                self.write(self.gen_reply(SocksRep.ADDRESS_TYPE_NOT_SUPPORTED))
                 raise NoAtypAllowed(f"Received unsupported ATYP value: {ATYP}")
-            DST_PORT = int.from_bytes(await self.stream_reader.readexactly(2), "big")
+            DST_PORT = int.from_bytes(await self.wf_readexactly(2), "big")
 
             # Step 2.2
             # The server handles the command and returns a reply.
@@ -181,15 +187,13 @@ class LocalTCP(asyncio.Protocol):
                     )
                     remote_tcp_transport, remote_tcp = await asyncio.wait_for(task, 5)
                 except ConnectionRefusedError:
-                    self.transport.write(self.gen_reply(SocksRep.CONNECTION_REFUSED))
+                    self.write(self.gen_reply(SocksRep.CONNECTION_REFUSED))
                     raise CommandExecError("Connection was refused") from None
                 except socket.gaierror:
-                    self.transport.write(self.gen_reply(SocksRep.HOST_UNREACHABLE))
+                    self.write(self.gen_reply(SocksRep.HOST_UNREACHABLE))
                     raise CommandExecError("Host is unreachable") from None
                 except Exception:
-                    self.transport.write(
-                        self.gen_reply(SocksRep.GENERAL_SOCKS_SERVER_FAILURE)
-                    )
+                    self.write(self.gen_reply(SocksRep.GENERAL_SOCKS_SERVER_FAILURE))
                     raise CommandExecError(
                         "General socks server failure occurred"
                     ) from None
@@ -198,9 +202,7 @@ class LocalTCP(asyncio.Protocol):
                     bind_addr, bind_port = remote_tcp_transport.get_extra_info(
                         "sockname"
                     )
-                    self.transport.write(
-                        self.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
-                    )
+                    self.write(self.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port))
                     self.stage = self.STAGE_CONNECT
 
                     self.config.ACCESS_LOG and access_logger.info(
@@ -216,9 +218,7 @@ class LocalTCP(asyncio.Protocol):
                     )
                     local_udp_transport, local_udp = await asyncio.wait_for(task, 5)
                 except Exception:
-                    self.transport.write(
-                        self.gen_reply(SocksRep.GENERAL_SOCKS_SERVER_FAILURE)
-                    )
+                    self.write(self.gen_reply(SocksRep.GENERAL_SOCKS_SERVER_FAILURE))
                     raise CommandExecError(
                         "General socks server failure occurred"
                     ) from None
@@ -227,9 +227,7 @@ class LocalTCP(asyncio.Protocol):
                     bind_addr, bind_port = local_udp_transport.get_extra_info(
                         "sockname"
                     )
-                    self.transport.write(
-                        self.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
-                    )
+                    self.write(self.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port))
                     self.stage = self.STAGE_UDP_ASSOCIATE
 
                     self.config.ACCESS_LOG and access_logger.info(
@@ -237,7 +235,7 @@ class LocalTCP(asyncio.Protocol):
                         f"at {bind_addr,bind_port}"
                     )
             else:
-                self.transport.write(self.gen_reply(SocksRep.COMMAND_NOT_SUPPORTED))
+                self.write(self.gen_reply(SocksRep.COMMAND_NOT_SUPPORTED))
                 raise NoCommandAllowed(f"Unsupported CMD value: {CMD}")
 
         except (SocksException, ConnectionError, ValueError) as e:
