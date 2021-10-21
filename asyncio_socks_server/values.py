@@ -1,7 +1,7 @@
 from enum import IntEnum
 
 
-class SocksRep(IntEnum):
+class Socks5Rep(IntEnum):
     SUCCEEDED = 0
     GENERAL_SOCKS_SERVER_FAILURE = 1
     CONNECTION_NOT_ALLOWED_BY_RULESET = 2
@@ -11,6 +11,11 @@ class SocksRep(IntEnum):
     TTL_EXPIRED = 6
     COMMAND_NOT_SUPPORTED = 7
     ADDRESS_TYPE_NOT_SUPPORTED = 8
+
+
+class Socks4Rep(IntEnum):
+    REQUEST_GRANTED = 90
+    REQUEST_REJECTED_OR_FAILED = 91
 
 
 class SocksAuthMethod(IntEnum):

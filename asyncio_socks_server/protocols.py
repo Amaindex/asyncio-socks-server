@@ -5,7 +5,7 @@ from asyncio.streams import StreamReader
 from socket import AF_INET, AF_INET6, inet_ntop, inet_pton
 from typing import Optional, Tuple
 
-from asyncio_socks_server.authenticators import AUTHENTICATORS_CLS_LIST
+from asyncio_socks_server.authenticators import AUTHENTICATORS_CLS_LIST, NoAuthenticator
 from asyncio_socks_server.config import Config
 from asyncio_socks_server.exceptions import (
     AuthenticationError,
@@ -19,7 +19,7 @@ from asyncio_socks_server.exceptions import (
 )
 from asyncio_socks_server.logger import access_logger, error_logger, logger
 from asyncio_socks_server.utils import get_socks_atyp_from_host
-from asyncio_socks_server.values import SocksAtyp, SocksCommand, SocksRep
+from asyncio_socks_server.values import SocksAtyp, SocksCommand, Socks5Rep
 
 
 class LocalTCP(asyncio.Protocol):
@@ -64,20 +64,34 @@ class LocalTCP(asyncio.Protocol):
         self.peername = transport.get_extra_info("peername")
         self.stream_reader.set_transport(transport)
         loop = asyncio.get_event_loop()
-        self.negotiate_task = loop.create_task(self.negotiate())
+        self.negotiate_task = loop.create_task(self.negotiate_misc())
         self.stage = self.STAGE_NEGOTIATE
 
         self.config.ACCESS_LOG and access_logger.debug(
             f"Made LocalTCP connection from {self.peername}"
         )
 
+    async def negotiate_misc(self):
+        try:
+            # Guess version.
+            VER = int.from_bytes(await self.wf_readexactly(1), "big")
+            if VER == 5:
+                await self.negotiate_socks5()
+            elif VER == 4 and self.authenticator_cls == NoAuthenticator:
+                await self.negotiate_socks4()
+            else:
+                raise NoVersionAllowed(f"Received unsupported socks version: {VER}")
+        except (SocksException, ConnectionError, ValueError) as e:
+            error_logger.warning(f"{e} during the negotiation with {self.peername}")
+            self.close()
+
     @staticmethod
-    def gen_reply(
-        rep: SocksRep,
+    def gen_socks5_reply(
+        rep: Socks5Rep,
         bind_host: str = "0.0.0.0",
         bind_port: int = 0,
     ) -> bytes:
-        """Generate reply for negotiation."""
+        """Generate reply for socks5 negotiation."""
 
         VER, RSV = b"\x05", b"\x00"
         ATYP = get_socks_atyp_from_host(bind_host)
@@ -92,155 +106,125 @@ class LocalTCP(asyncio.Protocol):
         BND_PORT = int(bind_port).to_bytes(2, "big")
         return VER + REP + RSV + ATYP + BND_ADDR + BND_PORT
 
-    async def negotiate(self):
-        """Negotiate with the client. Find more detail in RFC1928.
+    async def negotiate_socks5(self):
+        """Negotiate with the client. Find more detail in RFC1928."""
 
-        **Step 1.1**
-        The client connects to the server, and sends a version
-        identifier/method selection message: ::
+        # Step 1.1
+        # The client sends a (version identifier and) method selection message:
+        # +----+----------+----------+
+        # |VER | NMETHODS | METHODS  |
+        # +----+----------+----------+
+        # | 1  |    1     | 1 to 255 |
+        # +----+----------+----------+
+        NMETHODS = int.from_bytes(await self.wf_readexactly(1), "big")
+        METHODS = set(await self.wf_readexactly(NMETHODS))
 
-            +----+----------+----------+
-            |VER | NMETHODS | METHODS  |
-            +----+----------+----------+
-            | 1  |    1     | 1 to 255 |
-            +----+----------+----------+
+        # Step 1.2
+        # The server selects from one of the methods given in METHODS, and
+        # sends a METHOD selection message:
+        # +----+--------+
+        # |VER | METHOD |
+        # +----+--------+
+        # | 1  |   1    |
+        # +----+--------+
+        authenticator = self.authenticator_cls(
+            self.stream_reader, self.transport, self.config
+        )
+        METHOD = authenticator.select_method(METHODS)
+        self.write(b"\x05" + METHOD.to_bytes(1, "big"))
+        if METHOD == 0xFF:
+            raise NoAuthMethodAllowed("No authentication method is available")
 
-        **Step 1.2**
-        The server selects from one of the methods given in METHODS, and
-        sends a METHOD selection message: ::
+        # Step 1.3
+        # The client and the server enter a method-specific sub-negotiation.
+        await authenticator.authenticate()
 
-            +----+--------+
-            |VER | METHOD |
-            +----+--------+
-            | 1  |   1    |
-            +----+--------+
+        # Step 2.1
+        # The client sends a socks request formed as follows:
+        # +----+-----+-------+------+----------+----------+
+        # |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
+        # +----+-----+-------+------+----------+----------+
+        # | 1  |  1  | X'00' |  1   | Variable |    2     |
+        # +----+-----+-------+------+----------+----------+
+        VER, CMD, RSV, ATYP = await self.wf_readexactly(4)
+        if ATYP == SocksAtyp.IPV4:
+            DST_ADDR = inet_ntop(AF_INET, await self.wf_readexactly(4))
+        elif ATYP == SocksAtyp.DOMAIN:
+            domain_len = int.from_bytes(await self.wf_readexactly(1), "big")
+            DST_ADDR = (await self.wf_readexactly(domain_len)).decode()
+        elif ATYP == SocksAtyp.IPV6:
+            DST_ADDR = inet_ntop(AF_INET6, await self.wf_readexactly(16))
+        else:
+            self.write(self.gen_socks5_reply(Socks5Rep.ADDRESS_TYPE_NOT_SUPPORTED))
+            raise NoAtypAllowed(f"Received unsupported ATYP value: {ATYP}")
+        DST_PORT = int.from_bytes(await self.wf_readexactly(2), "big")
 
-        **Step 1.3**
-        The client and the server enter a method-specific sub-negotiation.
+        # Step 2.2
+        # The server handles the command and returns a reply formed as follows:
+        # +----+-----+-------+------+----------+----------+
+        # |VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
+        # +----+-----+-------+------+----------+----------+
+        # | 1  |  1  | X'00' |  1   | Variable |    2     |
+        # +----+-----+-------+------+----------+----------+
+        if CMD == SocksCommand.CONNECT:
+            await self.socks5_connect(DST_ADDR, DST_PORT)
+        elif CMD == SocksCommand.UDP_ASSOCIATE:
+            await self.socks5_udp_associate(DST_ADDR, DST_PORT)
+        else:
+            self.write(self.gen_socks5_reply(Socks5Rep.COMMAND_NOT_SUPPORTED))
+            raise NoCommandAllowed(f"Unsupported CMD value: {CMD}")
 
-        **Step 2.1**
-        The client sends a socks request formed as follows: ::
-
-            +----+-----+-------+------+----------+----------+
-            |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
-            +----+-----+-------+------+----------+----------+
-            | 1  |  1  | X'00' |  1   | Variable |    2     |
-            +----+-----+-------+------+----------+----------+
-
-        **Step 2.2**
-        The server handles the command and returns a reply formed as
-        follows: ::
-
-            +----+-----+-------+------+----------+----------+
-            |VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
-            +----+-----+-------+------+----------+----------+
-            | 1  |  1  | X'00' |  1   | Variable |    2     |
-            +----+-----+-------+------+----------+----------+
-
-        """
-
+    async def socks5_connect(self, dst_addr, dst_port):
         try:
-            # Step 1.1
-            # The client sends a version identifier/method selection message.
-            VER, NMETHODS = await self.wf_readexactly(2)
-            if VER != 5:
-                self.write(b"\x05\xff")
-                raise NoVersionAllowed(f"Received unsupported socks version: {VER}")
-            METHODS = set(await self.wf_readexactly(NMETHODS))
-
-            # Step 1.2
-            # The server selects a method and sends selection message.
-            authenticator = self.authenticator_cls(
-                self.stream_reader, self.transport, self.config
+            loop = asyncio.get_event_loop()
+            task = loop.create_connection(
+                lambda: RemoteTCP(self, self.config), dst_addr, dst_port
             )
-            METHOD = authenticator.select_method(METHODS)
-            self.write(b"\x05" + METHOD.to_bytes(1, "big"))
-            if METHOD == 0xFF:
-                raise NoAuthMethodAllowed("No authentication method is available")
+            remote_tcp_transport, remote_tcp = await asyncio.wait_for(task, 5)
+        except ConnectionRefusedError:
+            self.write(self.gen_socks5_reply(Socks5Rep.CONNECTION_REFUSED))
+            raise CommandExecError("Connection was refused") from None
+        except socket.gaierror:
+            self.write(self.gen_socks5_reply(Socks5Rep.HOST_UNREACHABLE))
+            raise CommandExecError("Host is unreachable") from None
+        except Exception:
+            self.write(self.gen_socks5_reply(Socks5Rep.GENERAL_SOCKS_SERVER_FAILURE))
+            raise CommandExecError("General socks server failure occurred") from None
+        else:
+            self.remote_tcp = remote_tcp
+            bind_addr, bind_port = remote_tcp_transport.get_extra_info("sockname")
+            self.write(self.gen_socks5_reply(Socks5Rep.SUCCEEDED, bind_addr, bind_port))
+            self.stage = self.STAGE_CONNECT
 
-            # Step 1.3
-            # The client and the server enter a method-specific sub-negotiation.
-            await authenticator.authenticate()
+            self.config.ACCESS_LOG and access_logger.info(
+                f"Established TCP stream between"
+                f" {self.peername} and {self.remote_tcp.peername}"
+            )
 
-            # Step 2.1
-            # The client send a socks request.
-            VER, CMD, RSV, ATYP = await self.wf_readexactly(4)
-            if ATYP == SocksAtyp.IPV4:
-                DST_ADDR = inet_ntop(AF_INET, await self.wf_readexactly(4))
-            elif ATYP == SocksAtyp.DOMAIN:
-                domain_len = int.from_bytes(await self.wf_readexactly(1), "big")
-                DST_ADDR = (await self.wf_readexactly(domain_len)).decode()
-            elif ATYP == SocksAtyp.IPV6:
-                DST_ADDR = inet_ntop(AF_INET6, await self.wf_readexactly(16))
-            else:
-                self.write(self.gen_reply(SocksRep.ADDRESS_TYPE_NOT_SUPPORTED))
-                raise NoAtypAllowed(f"Received unsupported ATYP value: {ATYP}")
-            DST_PORT = int.from_bytes(await self.wf_readexactly(2), "big")
+    async def socks5_udp_associate(self, dst_addr, dst_port):
+        try:
+            loop = asyncio.get_event_loop()
+            task = loop.create_datagram_endpoint(
+                lambda: LocalUDP((dst_addr, dst_port), self.config),
+                local_addr=("0.0.0.0", 0),
+            )
+            local_udp_transport, local_udp = await asyncio.wait_for(task, 5)
+        except Exception:
+            self.write(self.gen_socks5_reply(Socks5Rep.GENERAL_SOCKS_SERVER_FAILURE))
+            raise CommandExecError("General socks server failure occurred") from None
+        else:
+            self.local_udp = local_udp
+            bind_addr, bind_port = local_udp_transport.get_extra_info("sockname")
+            self.write(self.gen_socks5_reply(Socks5Rep.SUCCEEDED, bind_addr, bind_port))
+            self.stage = self.STAGE_UDP_ASSOCIATE
 
-            # Step 2.2
-            # The server handles the command and returns a reply.
-            if CMD == SocksCommand.CONNECT:
-                try:
-                    loop = asyncio.get_event_loop()
-                    task = loop.create_connection(
-                        lambda: RemoteTCP(self, self.config), DST_ADDR, DST_PORT
-                    )
-                    remote_tcp_transport, remote_tcp = await asyncio.wait_for(task, 5)
-                except ConnectionRefusedError:
-                    self.write(self.gen_reply(SocksRep.CONNECTION_REFUSED))
-                    raise CommandExecError("Connection was refused") from None
-                except socket.gaierror:
-                    self.write(self.gen_reply(SocksRep.HOST_UNREACHABLE))
-                    raise CommandExecError("Host is unreachable") from None
-                except Exception:
-                    self.write(self.gen_reply(SocksRep.GENERAL_SOCKS_SERVER_FAILURE))
-                    raise CommandExecError(
-                        "General socks server failure occurred"
-                    ) from None
-                else:
-                    self.remote_tcp = remote_tcp
-                    bind_addr, bind_port = remote_tcp_transport.get_extra_info(
-                        "sockname"
-                    )
-                    self.write(self.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port))
-                    self.stage = self.STAGE_CONNECT
+            self.config.ACCESS_LOG and access_logger.info(
+                f"Established UDP relay for {self.peername} "
+                f"at {bind_addr, bind_port}"
+            )
 
-                    self.config.ACCESS_LOG and access_logger.info(
-                        f"Established TCP stream between"
-                        f" {self.peername} and {self.remote_tcp.peername}"
-                    )
-            elif CMD == SocksCommand.UDP_ASSOCIATE:
-                try:
-                    loop = asyncio.get_event_loop()
-                    task = loop.create_datagram_endpoint(
-                        lambda: LocalUDP((DST_ADDR, DST_PORT), self.config),
-                        local_addr=("0.0.0.0", 0),
-                    )
-                    local_udp_transport, local_udp = await asyncio.wait_for(task, 5)
-                except Exception:
-                    self.write(self.gen_reply(SocksRep.GENERAL_SOCKS_SERVER_FAILURE))
-                    raise CommandExecError(
-                        "General socks server failure occurred"
-                    ) from None
-                else:
-                    self.local_udp = local_udp
-                    bind_addr, bind_port = local_udp_transport.get_extra_info(
-                        "sockname"
-                    )
-                    self.write(self.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port))
-                    self.stage = self.STAGE_UDP_ASSOCIATE
-
-                    self.config.ACCESS_LOG and access_logger.info(
-                        f"Established UDP relay for {self.peername} "
-                        f"at {bind_addr,bind_port}"
-                    )
-            else:
-                self.write(self.gen_reply(SocksRep.COMMAND_NOT_SUPPORTED))
-                raise NoCommandAllowed(f"Unsupported CMD value: {CMD}")
-
-        except (SocksException, ConnectionError, ValueError) as e:
-            error_logger.warning(f"{e} during the negotiation with {self.peername}")
-            self.close()
+    async def negotiate_socks4(self):
+        pass
 
     def data_received(self, data):
         if self.stage == self.STAGE_NEGOTIATE:
@@ -339,7 +323,7 @@ class LocalUDP(asyncio.DatagramProtocol):
         self.config = config
         self.transport = None
         self.sockname = None
-        self.udp_map = {} # local_host_port -> remote_udp
+        self.udp_map = {}  # local_host_port -> remote_udp
         self.is_closing = False
 
     def write(self, data, port_addr):
