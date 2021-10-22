@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 import itertools
 import socket
 from asyncio.streams import StreamReader
@@ -19,7 +20,7 @@ from asyncio_socks_server.exceptions import (
 )
 from asyncio_socks_server.logger import access_logger, error_logger, logger
 from asyncio_socks_server.utils import get_socks_atyp_from_host
-from asyncio_socks_server.values import SocksAtyp, SocksCommand, Socks5Rep
+from asyncio_socks_server.values import SocksAtyp, SocksCommand, Socks5Rep, Socks4Rep
 
 
 class LocalTCP(asyncio.Protocol):
@@ -81,7 +82,7 @@ class LocalTCP(asyncio.Protocol):
                 await self.negotiate_socks4()
             else:
                 raise NoVersionAllowed(f"Received unsupported socks version: {VER}")
-        except (SocksException, ConnectionError, ValueError) as e:
+        except (SocksException, ConnectionError, ValueError, OSError) as e:
             error_logger.warning(f"{e} during the negotiation with {self.peername}")
             self.close()
 
@@ -180,7 +181,7 @@ class LocalTCP(asyncio.Protocol):
             task = loop.create_connection(
                 lambda: RemoteTCP(self, self.config), dst_addr, dst_port
             )
-            remote_tcp_transport, remote_tcp = await asyncio.wait_for(task, 5)
+            remote_tcp_transport, remote_tcp = await asyncio.wait_for(task, 10)
         except ConnectionRefusedError:
             self.write(self.gen_socks5_reply(Socks5Rep.CONNECTION_REFUSED))
             raise CommandExecError("Connection was refused") from None
@@ -189,7 +190,7 @@ class LocalTCP(asyncio.Protocol):
             raise CommandExecError("Host is unreachable") from None
         except Exception:
             self.write(self.gen_socks5_reply(Socks5Rep.GENERAL_SOCKS_SERVER_FAILURE))
-            raise CommandExecError("General socks server failure occurred") from None
+            raise CommandExecError("General socks server failure occurred")
         else:
             self.remote_tcp = remote_tcp
             bind_addr, bind_port = remote_tcp_transport.get_extra_info("sockname")
@@ -208,10 +209,10 @@ class LocalTCP(asyncio.Protocol):
                 lambda: LocalUDP((dst_addr, dst_port), self.config),
                 local_addr=("0.0.0.0", 0),
             )
-            local_udp_transport, local_udp = await asyncio.wait_for(task, 5)
+            local_udp_transport, local_udp = await asyncio.wait_for(task, 10)
         except Exception:
             self.write(self.gen_socks5_reply(Socks5Rep.GENERAL_SOCKS_SERVER_FAILURE))
-            raise CommandExecError("General socks server failure occurred") from None
+            raise CommandExecError("General socks server failure occurred")
         else:
             self.local_udp = local_udp
             bind_addr, bind_port = local_udp_transport.get_extra_info("sockname")
@@ -223,8 +224,56 @@ class LocalTCP(asyncio.Protocol):
                 f"at {bind_addr, bind_port}"
             )
 
+    @staticmethod
+    def gen_socks4_reply(
+        rep: Socks4Rep,
+        dst_ip: str = "0.0.0.0",
+        dst_port: int = 0,
+    ) -> bytes:
+        """Generate reply for socks4 negotiation."""
+
+        VER = b"\x00"
+        CD = rep.to_bytes(1, "big")
+        DST_IP = inet_pton(AF_INET, dst_ip)
+        DST_PORT = int(dst_port).to_bytes(2, "big")
+        return VER + CD + DST_PORT + DST_IP
+
     async def negotiate_socks4(self):
-        pass
+        CMD = int.from_bytes(await self.wf_readexactly(1), "big")
+        DST_PORT = int.from_bytes(await self.wf_readexactly(2), "big")
+        DST_ADDR = inet_ntop(AF_INET, await self.wf_readexactly(4))
+        USERID = (await self.wf_readuntil(b"\x00"))[:-1]
+
+        socks4a_placeholders = ipaddress.IPv4Network("0.0.0.0/24")
+        if ipaddress.ip_address(DST_ADDR) in socks4a_placeholders:
+            DST_ADDR = (await self.wf_readuntil(b"\x00"))[:-1].decode()
+
+        if CMD == SocksCommand.CONNECT:
+            await self.socks4_connect(DST_ADDR, DST_PORT)
+        else:
+            self.write(self.gen_socks4_reply(Socks4Rep.REQUEST_REJECTED_OR_FAILED))
+            raise NoCommandAllowed(f"Unsupported CMD value: {CMD}")
+
+    async def socks4_connect(self, dst_addr, dst_port):
+
+        try:
+            loop = asyncio.get_event_loop()
+            task = loop.create_connection(
+                lambda: RemoteTCP(self, self.config), dst_addr, dst_port
+            )
+            remote_tcp_transport, remote_tcp = await asyncio.wait_for(task, 10)
+        except Exception:
+            self.write(self.gen_socks4_reply(Socks4Rep.REQUEST_REJECTED_OR_FAILED))
+            raise CommandExecError("Request was rejected or failed")
+        else:
+            self.remote_tcp = remote_tcp
+            self.write(self.gen_socks4_reply(Socks4Rep.REQUEST_GRANTED))
+            self.stage = self.STAGE_CONNECT
+
+            self.config.ACCESS_LOG and access_logger.info(
+                f"Established TCP stream between"
+                f" {self.peername} and {self.remote_tcp.peername}"
+            )
 
     def data_received(self, data):
         if self.stage == self.STAGE_NEGOTIATE:
