@@ -7,7 +7,7 @@ import pytest
 from asyncio_socks_server.authenticators import NoAuthenticator, UPAuthenticator
 from asyncio_socks_server.config import Config
 from asyncio_socks_server.protocols import LocalTCP
-from asyncio_socks_server.values import SocksAtyp, SocksAuthMethod, SocksRep
+from asyncio_socks_server.values import SocksAtyp, SocksAuthMethod, Socks5Rep
 
 
 @pytest.mark.parametrize(
@@ -56,12 +56,9 @@ def test_negotiate_with_invalid_socks_version(mock_transport):
     # VER, NMETHODS = b"\x06\x02"
     local_tcp.data_received(b"\x06\x02")
 
+    # NoVersionAllowed
     with pytest.raises(asyncio.exceptions.CancelledError):
         asyncio.get_event_loop().run_until_complete(local_tcp.negotiate_task)
-
-    # NoVersionAllowed
-    calls = [call(b"\x05\xff")]
-    local_tcp.transport.write.assert_has_calls(calls)
 
 
 def test_negotiate_with_invalid_auth_method(mock_transport):
@@ -144,20 +141,20 @@ def test_negotiate_with_invalid_atyp(local_tcp_after_no_auth):
 
     # NoAtypAllowed
     local_tcp_after_no_auth.transport.write.assert_called_with(
-        LocalTCP.gen_reply(SocksRep.ADDRESS_TYPE_NOT_SUPPORTED)
+        LocalTCP.gen_socks5_reply(Socks5Rep.ADDRESS_TYPE_NOT_SUPPORTED)
     )
 
 
 @pytest.mark.parametrize(
     "exception,status",
     [
-        (ConnectionRefusedError, SocksRep.CONNECTION_REFUSED),
-        (gaierror, SocksRep.HOST_UNREACHABLE),
-        (asyncio.TimeoutError, SocksRep.GENERAL_SOCKS_SERVER_FAILURE),
+        (ConnectionRefusedError, Socks5Rep.CONNECTION_REFUSED),
+        (gaierror, Socks5Rep.HOST_UNREACHABLE),
+        (asyncio.TimeoutError, Socks5Rep.GENERAL_SOCKS_SERVER_FAILURE),
     ],
 )
 def test_negotiate_with_connect_exceptions(
-    local_tcp_after_no_auth, exception, status: SocksRep
+    local_tcp_after_no_auth, exception, status: Socks5Rep
 ):
 
     # VER, CMD, RSV = b"\x05\x01\x00"
@@ -188,19 +185,19 @@ def test_negotiate_with_connect_exceptions(
     # patcher_create_connection.stop()
 
     local_tcp_after_no_auth.transport.write.assert_called_with(
-        LocalTCP.gen_reply(status)
+        LocalTCP.gen_socks5_reply(status)
     )
 
 
 @pytest.mark.parametrize(
     "exception,status",
     [
-        (ConnectionRefusedError, SocksRep.GENERAL_SOCKS_SERVER_FAILURE),
-        (asyncio.TimeoutError, SocksRep.GENERAL_SOCKS_SERVER_FAILURE),
+        (ConnectionRefusedError, Socks5Rep.GENERAL_SOCKS_SERVER_FAILURE),
+        (asyncio.TimeoutError, Socks5Rep.GENERAL_SOCKS_SERVER_FAILURE),
     ],
 )
 def test_negotiate_with_udp_associate_exception(
-    local_tcp_after_no_auth, exception, status: SocksRep
+    local_tcp_after_no_auth, exception, status: Socks5Rep
 ):
     # VER, CMD, RSV = b"\x05\x03\x00"
     local_tcp_after_no_auth.data_received(b"\x05\x03\x00")
@@ -230,7 +227,7 @@ def test_negotiate_with_udp_associate_exception(
     # patcher_create_datagram_endpoint.stop()
 
     local_tcp_after_no_auth.transport.write.assert_called_with(
-        LocalTCP.gen_reply(status)
+        LocalTCP.gen_socks5_reply(status)
     )
 
 
@@ -263,7 +260,7 @@ def test_negotiate_with_udp_associate_exception(
 #
 #     bind_addr, bind_port = mock_remote_tcp_transport.get_extra_info("sockname")
 #     local_tcp_after_no_auth.transport.write.assert_called_with(
-#         LocalTCP.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
+#         LocalTCP.gen_socks5_reply(Socks5Rep.SUCCEEDED, bind_addr, bind_port)
 #     )
 #     assert local_tcp_after_no_auth.remote_tcp is mock_remote_tcp
 #
@@ -297,7 +294,7 @@ def test_negotiate_with_udp_associate_exception(
 #
 #     bind_addr, bind_port = mock_local_udp_transport.get_extra_info("sockname")
 #     local_tcp_after_no_auth.transport.write.assert_called_with(
-#         LocalTCP.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
+#         LocalTCP.gen_socks5_reply(Socks5Rep.SUCCEEDED, bind_addr, bind_port)
 #     )
 #     assert local_tcp_after_no_auth.local_udp is mock_local_udp
 #
@@ -365,7 +362,7 @@ def test_negotiate_with_udp_associate_exception(
 #
 #     bind_addr, bind_port = mock_remote_tcp_transport.get_extra_info("sockname")
 #     local_tcp_after_username_password_auth.transport.write.assert_called_with(
-#         LocalTCP.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
+#         LocalTCP.gen_socks5_reply(Socks5Rep.SUCCEEDED, bind_addr, bind_port)
 #     )
 #     assert local_tcp_after_username_password_auth.remote_tcp is mock_remote_tcp
 
