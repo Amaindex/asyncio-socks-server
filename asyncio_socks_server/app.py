@@ -2,6 +2,7 @@ import asyncio
 import logging.config
 import signal
 from typing import Any, Optional, Union
+import platform
 
 from asyncio_socks_server.config import BASE_LOGO, SOCKS_SERVER_PREFIX, Config
 from asyncio_socks_server.logger import error_logger, gen_log_config, logger
@@ -48,11 +49,11 @@ class SocksServer:
 
     def run(self):
         self.loop.run_until_complete(self.proxyman.start_server())
-
-        for s in HANDLED_SIGNALS:
-            self.loop.add_signal_handler(
-                s, lambda s=s: asyncio.create_task(self.shut_down())
-            )
+        if not platform.system() == "Windows":
+            for s in HANDLED_SIGNALS:
+                self.loop.add_signal_handler(
+                    s, lambda s=s: asyncio.create_task(self.shut_down())
+                )
 
         logger.info(
             f"Server launched on" f" {self.config.LISTEN_HOST,self.config.LISTEN_PORT}"
