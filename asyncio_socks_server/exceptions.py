@@ -36,3 +36,7 @@ class AuthenticationError(SocksException):
 
 class NoAuthMethodAllowed(SocksException):
     """The server does not support the authentication methods provided by the client."""
+
+
+class NoAddressAllowed(SocksException):
+    """The server does not allow the client to connect to the requested address."""

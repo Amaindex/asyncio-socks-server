@@ -115,6 +115,24 @@ def test_negotiate_with_wrong_username_password(mock_transport):
     local_tcp.transport.write.assert_has_calls(calls)
 
 
+def test_negotiate_with_no_allowed_ip(mock_transport):
+    config = Config()
+    config.NETWORKS = ["192.168.88.0/24", "10.233.4.1"]
+    local_tcp = LocalTCP(config)
+    local_tcp.connection_made(mock_transport)
+    local_tcp.peername = ["10.233.4.2", 80]
+    # VER, NMETHODS = b"\x05\x01"
+    local_tcp.data_received(b"\x05\x01")
+    # METHOD = b"\x00"
+    local_tcp.data_received(b"\x00")
+    with pytest.raises(asyncio.exceptions.CancelledError):
+        asyncio.get_event_loop().run_until_complete(local_tcp.negotiate_task)
+
+    # NoAddressAllowed
+    local_tcp
+    local_tcp.transport.write.assert_called_with(LocalTCP.gen_socks5_reply(Socks5Rep.ADDRESS_NOT_ALLOWED))
+
+
 @pytest.fixture()
 def local_tcp_after_no_auth(mock_transport):
     config = Config()
@@ -154,9 +172,8 @@ def test_negotiate_with_invalid_atyp(local_tcp_after_no_auth):
     ],
 )
 def test_negotiate_with_connect_exceptions(
-    local_tcp_after_no_auth, exception, status: Socks5Rep
+        local_tcp_after_no_auth, exception, status: Socks5Rep
 ):
-
     # VER, CMD, RSV = b"\x05\x01\x00"
     local_tcp_after_no_auth.data_received(b"\x05\x01\x00")
     ATYP = SocksAtyp.IPV4
@@ -197,7 +214,7 @@ def test_negotiate_with_connect_exceptions(
     ],
 )
 def test_negotiate_with_udp_associate_exception(
-    local_tcp_after_no_auth, exception, status: Socks5Rep
+        local_tcp_after_no_auth, exception, status: Socks5Rep
 ):
     # VER, CMD, RSV = b"\x05\x03\x00"
     local_tcp_after_no_auth.data_received(b"\x05\x03\x00")
