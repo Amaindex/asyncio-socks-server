@@ -23,6 +23,7 @@ DEFAULT_CONFIG = {
     "ACCESS_LOG": False,
     "STRICT": False,
     "DEBUG": False,
+    "NETWORKS": [],
     "USERS": {},
     "SOCKET_TIMEOUT": 60,
 }
@@ -35,6 +36,7 @@ class Config(dict):
     ACCESS_LOG: bool
     STRICT: bool
     DEBUG: bool
+    NETWORKS: list
     USERS: dict
     SOCKET_TIMEOUT: int
 

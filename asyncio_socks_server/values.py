@@ -11,11 +11,13 @@ class Socks5Rep(IntEnum):
     TTL_EXPIRED = 6
     COMMAND_NOT_SUPPORTED = 7
     ADDRESS_TYPE_NOT_SUPPORTED = 8
+    ADDRESS_NOT_ALLOWED = 9
 
 
 class Socks4Rep(IntEnum):
     REQUEST_GRANTED = 90
     REQUEST_REJECTED_OR_FAILED = 91
+    ADDRESS_NOT_ALLOWED = 92
 
 
 class SocksAuthMethod(IntEnum):

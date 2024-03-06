@@ -17,6 +17,7 @@ from asyncio_socks_server.exceptions import (
     NoCommandAllowed,
     NoVersionAllowed,
     SocksException,
+    NoAddressAllowed
 )
 from asyncio_socks_server.logger import access_logger, error_logger, logger
 from asyncio_socks_server.utils import get_socks_atyp_from_host
@@ -76,6 +77,7 @@ class LocalTCP(asyncio.Protocol):
         try:
             # Guess version.
             VER = int.from_bytes(await self.wf_readexactly(1), "big")
+            await self.validate(VER)
             if VER == 5:
                 await self.negotiate_socks5()
             elif VER == 4 and self.authenticator_cls == NoAuthenticator:
@@ -86,11 +88,25 @@ class LocalTCP(asyncio.Protocol):
             error_logger.warning(f"{e} during the negotiation with {self.peername}")
             self.close()
 
+    async def validate(self, ver) -> None:
+        if self.config.NETWORKS is None or len(self.config.NETWORKS) <= 0:
+            return
+        ip_addr = ipaddress.ip_address(self.peername[0])
+        for network in self.config.NETWORKS:
+            net = ipaddress.ip_network(network, strict=False)
+            if ip_addr in net:
+                return
+        if ver == 5:
+            self.transport.write(self.gen_socks5_reply(Socks5Rep.ADDRESS_NOT_ALLOWED))
+        elif ver == 4:
+            self.transport.write(self.gen_socks4_reply(Socks4Rep.ADDRESS_NOT_ALLOWED))
+        raise NoAddressAllowed(f"Address {self.peername[0]} is not allowed") from None
+
     @staticmethod
     def gen_socks5_reply(
-        rep: Socks5Rep,
-        bind_host: str = "0.0.0.0",
-        bind_port: int = 0,
+            rep: Socks5Rep,
+            bind_host: str = "0.0.0.0",
+            bind_port: int = 0,
     ) -> bytes:
         """Generate reply for socks5 negotiation."""
 
@@ -226,9 +242,9 @@ class LocalTCP(asyncio.Protocol):
 
     @staticmethod
     def gen_socks4_reply(
-        rep: Socks4Rep,
-        dst_ip: str = "0.0.0.0",
-        dst_port: int = 0,
+            rep: Socks4Rep,
+            dst_ip: str = "0.0.0.0",
+            dst_port: int = 0,
     ) -> bytes:
         """Generate reply for socks4 negotiation."""
 
@@ -405,30 +421,30 @@ class LocalUDP(asyncio.DatagramProtocol):
         """
 
         length = 0
-        RSV = data[length : length + 2]
+        RSV = data[length: length + 2]
         length += 2
-        FRAG = data[length : length + 1]
+        FRAG = data[length: length + 1]
         if int.from_bytes(FRAG, "big") != 0:
             raise HeaderParseError("Received unsupported FRAG value")
         length += 1
-        ATYP = int.from_bytes(data[length : length + 1], "big")
+        ATYP = int.from_bytes(data[length: length + 1], "big")
         length += 1
         if ATYP == SocksAtyp.IPV4:
-            ipv4 = data[length : length + 4]
+            ipv4 = data[length: length + 4]
             DST_ADDR = inet_ntop(AF_INET, ipv4)
             length += 4
         elif ATYP == SocksAtyp.DOMAIN:
-            addr_len = int.from_bytes(data[length : length + 1], byteorder="big")
+            addr_len = int.from_bytes(data[length: length + 1], byteorder="big")
             length += 1
-            DST_ADDR = data[length : length + addr_len].decode()
+            DST_ADDR = data[length: length + addr_len].decode()
             length += addr_len
         elif ATYP == SocksAtyp.IPV6:
-            ipv6 = data[length : length + 16]
+            ipv6 = data[length: length + 16]
             DST_ADDR = inet_ntop(AF_INET6, ipv6)
             length += 16
         else:
             raise HeaderParseError(f"Received unsupported ATYP value: {ATYP}")
-        DST_PORT = int.from_bytes(data[length : length + 2], "big")
+        DST_PORT = int.from_bytes(data[length: length + 2], "big")
         length += 2
         if length > len(data):
             raise HeaderParseError("Header is too short")
