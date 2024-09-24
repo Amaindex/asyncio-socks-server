@@ -197,7 +197,7 @@ class LocalTCP(asyncio.Protocol):
                     self.remote_tcp = remote_tcp
                     bind_addr, bind_port = remote_tcp_transport.get_extra_info(
                         "sockname"
-                    )
+                    )[:2]
                     self.transport.write(
                         self.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
                     )
@@ -226,7 +226,7 @@ class LocalTCP(asyncio.Protocol):
                     self.local_udp = local_udp
                     bind_addr, bind_port = local_udp_transport.get_extra_info(
                         "sockname"
-                    )
+                    )[:2]
                     self.transport.write(
                         self.gen_reply(SocksRep.SUCCEEDED, bind_addr, bind_port)
                     )
