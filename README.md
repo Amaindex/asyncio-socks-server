@@ -84,14 +84,14 @@ Built-ins:
 ## Architecture sketch
 
 ```text
-Client -- SOCKS5 --> Server --> Target
-                     |
-                     +-- auth / route hooks
-                     +-- data pipeline hooks
-                     +-- flow close hooks
+Client ── SOCKS5 ──▶ Server ──▶ Target
+                     │
+                     ├─ auth / route hooks
+                     ├─ data pipeline hooks
+                     └─ flow close hooks
 
 ChainRouter:
-Client --> A --> B --> C --> Target
+Client ──▶ A ──▶ B ──▶ C ──▶ Target
 ```
 
 ## Chain proxying
@@ -99,7 +99,7 @@ Client --> A --> B --> C --> Target
 Each node only knows its next hop:
 
 ```python
-# A -> B -> C -> target
+# A ─▶ B ─▶ C ─▶ target
 Server(addons=[ChainRouter("B:1080")])  # A
 Server(addons=[ChainRouter("C:1080")])  # B
 Server()                                # C

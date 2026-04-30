@@ -84,14 +84,14 @@ Hook 调度有三种模型：
 ## 架构简图
 
 ```text
-Client -- SOCKS5 --> Server --> Target
-                     |
-                     +-- auth / route hooks
-                     +-- data pipeline hooks
-                     +-- flow close hooks
+Client ── SOCKS5 ──▶ Server ──▶ Target
+                     │
+                     ├─ auth / route hooks
+                     ├─ data pipeline hooks
+                     └─ flow close hooks
 
 ChainRouter:
-Client --> A --> B --> C --> Target
+Client ──▶ A ──▶ B ──▶ C ──▶ Target
 ```
 
 ## 链式代理
@@ -99,7 +99,7 @@ Client --> A --> B --> C --> Target
 每个节点只知道自己的下一跳：
 
 ```python
-# A -> B -> C -> target
+# A ─▶ B ─▶ C ─▶ target
 Server(addons=[ChainRouter("B:1080")])  # A
 Server(addons=[ChainRouter("C:1080")])  # B
 Server()                                # C
