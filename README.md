@@ -81,6 +81,19 @@ Built-ins:
 - `StatsServer` for low-frequency local JSON stats
 - `TrafficCounter`, `FileAuth`, `IPFilter`, `Logger`
 
+## Architecture sketch
+
+```text
+Client -- SOCKS5 --> Server --> Target
+                     |
+                     +-- auth / route hooks
+                     +-- data pipeline hooks
+                     +-- flow close hooks
+
+ChainRouter:
+Client --> A --> B --> C --> Target
+```
+
 ## Chain proxying
 
 Each node only knows its next hop:
