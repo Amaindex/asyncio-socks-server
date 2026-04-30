@@ -1,6 +1,6 @@
 # Architecture
 
-> [中文](architecture.zh-CN.md)
+[README](../README.md) · [Addon model](addon-model.md) · [Public API](public-api.md) · [简体中文](architecture.zh-CN.md)
 
 The core handles protocol parsing, relay, and hook dispatch. Addons handle policy and routing. Chain proxying, traffic counting, and access control are addon behavior.
 

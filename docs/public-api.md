@@ -1,6 +1,6 @@
 # Public API
 
-> [中文](public-api.zh-CN.md)
+[README](../README.md) · [Architecture](architecture.md) · [Addon model](addon-model.md) · [简体中文](public-api.zh-CN.md)
 
 This document defines the asyncio-socks-server 1.x compatibility surface.
 Stable imports live at the package root. Submodules remain importable.

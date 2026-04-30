@@ -1,6 +1,6 @@
 # Addon Model
 
-> [中文](addon-model.zh-CN.md)
+[README](../README.md) · [Architecture](architecture.md) · [Public API](public-api.md) · [简体中文](addon-model.zh-CN.md)
 
 Addons are Python classes with optional async methods. The server calls them at defined points in the SOCKS5 flow.
 

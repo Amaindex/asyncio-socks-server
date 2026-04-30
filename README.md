@@ -5,77 +5,45 @@
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-> SOCKS5 server with async Python addon hooks.
+SOCKS5 server with async Python addon hooks.
 
-**[中文](README.zh-CN.md)**
+[Docs](#docs) · [Architecture](docs/architecture.md) · [Addon model](docs/addon-model.md) · [Public API](docs/public-api.md) · [简体中文](README.zh-CN.md)
 
-## Overview
-
-asyncio-socks-server is a SOCKS5 server built around async hooks. The core handles protocol parsing, relay, and hook dispatch. Addons handle authentication, routing, data transformation, logging, and stats.
-
-Design:
-
-- **Three hook models**: competitive, pipeline, observational
-- **Chain proxying is an addon**: TCP uses `ChainRouter`; UDP uses UDP-over-TCP entry and exit components
-- **No runtime dependencies**: Python stdlib only
-
-## Architecture
-
-```text
-SOCKS5 Client          Server                          Target / Next Hop
-─────────────          ──────                          ──────────────────
-
-TCP CONNECT ─────────▶ handshake
-                       ├─ dispatch_auth (competitive)
-                       └─ dispatch_connect (competitive)
-                          ├─ no addon ───────────────▶ direct
-                          └─ ChainRouter ────────────▶ next SOCKS5 hop
-
-                       relay: dispatch_data (pipeline) per chunk
-                       teardown: dispatch_flow_close (observational)
-
-UDP ASSOCIATE ───────▶ handshake
-                       └─ dispatch_udp_associate (competitive)
-                          ├─ no addon ──▶ UdpRelay
-                          └─ UdpOverTcpEntry ──▶ TCP frames ──▶ exit node
-```
-
-Modules: **core** (protocol), **server** (handshake/relay/lifecycle), **client** (SOCKS5 client), **addons** (hooks and built-ins). See [docs/architecture.md](docs/architecture.md).
-
-## Capabilities
-
-- 8 async hooks for auth, connection routing, data handling, and lifecycle
-- TCP chain proxying through `ChainRouter`
-- UDP chaining through `UdpOverTcpEntry` and `UdpOverTcpExitServer`
-- Per-flow identity and byte counters through `Flow`
-- Optional local JSON stats API through `StatsServer`
-- Shared-socket UDP relay with TTL route cleanup
-- IPv6 dual-stack listener and Happy Eyeballs-style client fallback
-- Python stdlib runtime
-
-## API Status
-
-The 1.x API is the package root: `Server`, `Addon`, `Address`, `Flow`,
-`ChainRouter`, `StatsServer`, `connect`, and related types.
-
-See [docs/public-api.md](docs/public-api.md).
-
-## Quick Start
-
-### CLI
+## Install
 
 ```shell
-asyncio_socks_server                              # basic proxy
-asyncio_socks_server --auth user:pass --port 9050 # with auth
+pip install asyncio-socks-server
 ```
 
-### Python API
+Docker images are versioned:
+
+```shell
+docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.0.1
+```
+
+## Run
+
+```shell
+asyncio_socks_server
+asyncio_socks_server --host 127.0.0.1 --port 9050
+asyncio_socks_server --auth user:pass
+```
+
+CLI flags:
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--host` | `::` | Bind address |
+| `--port` | `1080` | Bind port |
+| `--auth` | None | `username:password` |
+| `--log-level` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+
+## Use from Python
 
 ```python
 from asyncio_socks_server import Server
 
-server = Server(host="::", port=1080)
-server.run()
+Server(host="::", port=1080).run()
 ```
 
 With addons:
@@ -92,36 +60,51 @@ server = Server(
 server.run()
 ```
 
-Addon order is list order. Hook API: [docs/addon-model.md](docs/addon-model.md).
+Addon order is execution order.
 
-### Chain Proxying
+## Model
+
+The core handles SOCKS5 parsing, relay, and hook dispatch. Addons handle policy.
+
+Hook dispatch has three models:
+
+| Model | Hooks | Contract |
+|-------|-------|----------|
+| Competitive | `on_auth`, `on_connect`, `on_udp_associate` | First non-`None` result wins |
+| Pipeline | `on_data` | Output from one addon becomes input to the next |
+| Observational | `on_start`, `on_stop`, `on_flow_close`, `on_error` | All applicable addons run |
+
+Built-ins:
+
+- `ChainRouter` for TCP chain proxying
+- `UdpOverTcpEntry` and `UdpOverTcpExitServer` for UDP chain proxying
+- `StatsServer` for low-frequency local JSON stats
+- `TrafficCounter`, `FileAuth`, `IPFilter`, `Logger`
+
+## Chain proxying
 
 Each node only knows its next hop:
 
 ```python
-# Node A → B → C → Target
+# A -> B -> C -> target
 Server(addons=[ChainRouter("B:1080")])  # A
 Server(addons=[ChainRouter("C:1080")])  # B
-Server()                                 # C: direct
+Server()                                # C
 ```
 
-UDP chaining:
+UDP chain proxying uses TCP between proxy nodes:
 
 ```python
-# Entry node
-from asyncio_socks_server import UdpOverTcpEntry
-server = Server(addons=[UdpOverTcpEntry("exit-host:9020")])
+from asyncio_socks_server import Server, UdpOverTcpEntry, UdpOverTcpExitServer
 
-# Exit node (standalone TCP service)
-from asyncio_socks_server import UdpOverTcpExitServer
-exit_srv = UdpOverTcpExitServer(host="::", port=9020)
-exit_srv.run()
+entry = Server(addons=[UdpOverTcpEntry("exit-host:9020")])
+exit_server = UdpOverTcpExitServer(host="::", port=9020)
 ```
 
-### Client Library
+## Client
 
 ```python
-from asyncio_socks_server import connect, Address
+from asyncio_socks_server import Address, connect
 
 conn = await connect(
     proxy_addr=Address("127.0.0.1", 1080),
@@ -132,27 +115,7 @@ await conn.writer.drain()
 data = await conn.reader.read(4096)
 ```
 
-## Build
-
-Python 3.12+. Development uses [uv](https://docs.astral.sh/uv/).
-
-```shell
-git clone https://github.com/Amaindex/asyncio-socks-server.git
-cd asyncio-socks-server
-uv sync
-```
-
-Development:
-
-```shell
-uv run ruff check .          # lint
-uv run ruff format --check . # format check
-uv run pytest tests/ -v      # test (260 cases)
-uv run pyright src/           # type check
-uv build                     # package build
-```
-
-## Public API
+## API surface
 
 Stable imports live at the package root:
 
@@ -161,70 +124,43 @@ from asyncio_socks_server import (
     Addon,
     Address,
     ChainRouter,
-    Connection,
-    Direction,
-    FileAuth,
     Flow,
-    IPFilter,
-    Logger,
     Server,
     StatsServer,
-    TrafficCounter,
     UdpOverTcpEntry,
     UdpOverTcpExitServer,
-    UdpRelayBase,
     connect,
 )
 ```
 
-Submodules are importable. Root exports are the compatibility contract.
+Root exports are the 1.x compatibility contract. Submodules remain importable.
 
-## Configuration
+## Docs
 
-No config files.
+| Document | Scope |
+|----------|-------|
+| [Architecture](docs/architecture.md) | Core flow, relay design, UDP-over-TCP, Flow context |
+| [Addon model](docs/addon-model.md) | Hook contracts, dispatch semantics, built-in addons |
+| [Public API](docs/public-api.md) | 1.x compatibility surface |
 
-CLI mode (basic proxy):
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--host` | `::` | Bind address |
-| `--port` | `1080` | Bind port |
-| `--auth` | None | `username:password` |
-| `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
-
-For addons or custom behavior, instantiate `Server` from Python. See [docs/addon-model.md](docs/addon-model.md).
-
-## Deployment
+## Development
 
 ```shell
-pip install asyncio-socks-server
+git clone https://github.com/Amaindex/asyncio-socks-server.git
+cd asyncio-socks-server
+uv sync
+uv run ruff check .
+uv run ruff format --check .
+uv run pyright
+uv run pytest
+uv build
 ```
 
-Docker:
+## Release
 
-```shell
-docker run --rm -p 1080:1080 amaindex/asyncio-socks-server
-```
+GitHub Actions tests Python 3.12 and 3.13, builds the Python package, and builds Docker images.
 
-PyPI and Docker Hub artifacts are published from GitHub releases.
-
-## Release and CI
-
-GitHub Actions runs lint, format check, pyright, package build, and tests for pull requests and pushes to `main`. Tests run on Python 3.12 and 3.13.
-
-Release workflow:
-
-1. Create a GitHub Release from a tag such as `v1.0.0`.
-2. The release workflow builds and publishes the Python package.
-3. The Docker workflow builds and pushes the image when Docker Hub credentials are configured.
-
-## Documentation
-
-| Doc | Content |
-|-----|---------|
-| [Architecture](docs/architecture.md) | Component relationships, data flow diagrams, UDP relay design, Flow context, design decisions |
-| [Addon Model](docs/addon-model.md) | Hook API reference, execution models, chain proxying, StatsServer, custom addon patterns |
-| [Public API](docs/public-api.md) | 1.x compatibility surface, root exports, hook contracts, Stats API |
+Create a GitHub Release from a tag such as `v1.0.1`. The release workflow publishes the Python package. The Docker workflow publishes semver image tags.
 
 ## License
 

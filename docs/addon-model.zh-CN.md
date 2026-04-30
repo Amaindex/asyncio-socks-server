@@ -1,6 +1,6 @@
 # Addon 模型
 
-> [English](addon-model.md)
+[README](../README.zh-CN.md) · [架构](architecture.zh-CN.md) · [公共 API](public-api.zh-CN.md) · [English](addon-model.md)
 
 Addon 是包含可选 async 方法的 Python 类。Server 在 SOCKS5 流程的固定位置调用它们。
 

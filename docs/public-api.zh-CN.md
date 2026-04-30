@@ -1,6 +1,6 @@
 # 公共 API
 
-> [English](public-api.md)
+[README](../README.zh-CN.md) · [架构](architecture.zh-CN.md) · [Addon 模型](addon-model.zh-CN.md) · [English](public-api.md)
 
 本文定义 asyncio-socks-server 1.x 的兼容性边界。稳定导入面是包根。子模块仍可导入。
 
