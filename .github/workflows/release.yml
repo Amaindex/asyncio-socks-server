@@ -31,4 +31,7 @@ jobs:
         run: uv build --python 3.12
 
       - name: Publish to PyPI
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_PASSWORD }}
+          UV_PUBLISH_CHECK_URL: https://pypi.org/simple/asyncio-socks-server/
         run: uv publish
