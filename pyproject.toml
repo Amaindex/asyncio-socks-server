@@ -1,69 +1,55 @@
-[tool.poetry]
+[project]
 name = "asyncio-socks-server"
-version = "0.3.0"
-description = "A socks server implemented with asyncio."
-authors = ["Amaindex <amaindex@outlook.com>"]
-license = "MIT"
-
+version = "1.0.0"
+description = "A SOCKS5 toolchain/framework with programmable addons"
 readme = "README.md"
-
-repository = "https://github.com/Amaindex/asyncio-socks-server"
-
-keywords = ["asynchronous","asyncio", "proxy", "socks"]
-
+requires-python = ">=3.12"
+license = "MIT"
+authors = [
+    { name = "Amaindex", email = "amaindex@outlook.com" },
+]
+keywords = ["asyncio", "socks5", "proxy", "addon"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Environment :: Console",
+    "Development Status :: 5 - Production/Stable",
+    "Framework :: AsyncIO",
     "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Cython",
-    "Topic :: Internet :: Proxy Servers"
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: Proxy Servers",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.8"
+[project.urls]
+Homepage = "https://github.com/Amaindex/asyncio-socks-server"
+Repository = "https://github.com/Amaindex/asyncio-socks-server"
+Issues = "https://github.com/Amaindex/asyncio-socks-server/issues"
 
-[tool.poetry.dev-dependencies]
-isort = "^5.9.3"
-black = "^21.7b0"
-autoflake = "^1.4"
-PySocks = "^1.7.1"
-Sphinx = "^4.2.0"
-autodocsumm = "^0.2.6"
-pytest = "^6.2.5"
-
-[tool.poetry.scripts]
-asyncio_socks_server = 'asyncio_socks_server.__main__:main'
+[project.scripts]
+asyncio_socks_server = "asyncio_socks_server.cli:main"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/asyncio_socks_server"]
 
-[tool.black]
+[tool.ruff]
+target-version = "py312"
 line-length = 88
-target-version = ['py38']
-exclude = '''
-/(
-    \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-  | tests/.*/setup.py
-)/
-'''
 
-[tool.isort]
-ensure_newline_before_comments = true
-force_grid_wrap = 0
-include_trailing_comma = true
-line_length = 88
-multi_line_output = 3
-use_parentheses = true
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
 
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+include = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = ["ruff>=0.11", "pytest>=8", "pytest-asyncio>=0.26", "pyright>=1.1"]
