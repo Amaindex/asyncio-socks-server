@@ -13,4 +13,4 @@ USER appuser
 EXPOSE 1080
 
 ENTRYPOINT ["asyncio_socks_server"]
-CMD ["--host", "::", "--port", "1080"]
+CMD ["--host", "0.0.0.0", "--port", "1080"]

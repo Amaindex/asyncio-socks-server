@@ -14,10 +14,12 @@ def _is_ipv6(host: str) -> bool:
 
 def create_dualstack_tcp_socket(host: str, port: int) -> socket.socket:
     """Create a TCP server socket with dual-stack (IPv4+IPv6) support."""
-    if host in ("0.0.0.0", "", "::"):
+    if host in ("", "::"):
         return socket.create_server(
             ("::", port), family=socket.AF_INET6, dualstack_ipv6=True
         )
+    if host == "0.0.0.0":
+        return socket.create_server((host, port), family=socket.AF_INET)
     if _is_ipv6(host):
         return socket.create_server((host, port), family=socket.AF_INET6)
     return socket.create_server((host, port))
