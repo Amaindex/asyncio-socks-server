@@ -1,7 +1,16 @@
-FROM python:3.8-slim-buster as base
+FROM python:3.12-slim
 
-LABEL Name="asyncio-socks-server" Author="Amaindex"
+WORKDIR /app
 
-COPY ./asyncio_socks_server ./asyncio_socks_server
+COPY pyproject.toml README.md LICENSE ./
+COPY src ./src
 
-ENTRYPOINT ["python", "-m", "asyncio_socks_server"]
+RUN pip install --no-cache-dir --root-user-action=ignore . \
+    && useradd --create-home --shell /usr/sbin/nologin appuser
+
+USER appuser
+
+EXPOSE 1080
+
+ENTRYPOINT ["asyncio_socks_server"]
+CMD ["--host", "::", "--port", "1080"]

@@ -1,31 +1,89 @@
 name: Tests
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  run-test:
+  quality:
+    name: Quality
     runs-on: ubuntu-latest
+
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - name: Set up python
-        uses: actions/setup-python@v2
+      - uses: astral-sh/setup-uv@v4
         with:
-          python-version: 3.8
+          enable-cache: true
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
+      - name: Set up Python
+        run: uv python install 3.12
 
       - name: Install dependencies
-        run: poetry install --no-interaction --no-root
+        run: uv sync --group dev --python 3.12
 
-      - name: Install library
-        run: poetry install --no-interaction
+      - name: Lint
+        run: uv run ruff check .
 
-      - name: Run tests
-        run: poetry run pytest
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Type check
+        run: uv run pyright
+
+  test:
+    name: Test Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --group dev --python ${{ matrix.python-version }}
+
+      - name: Test
+        run: uv run pytest -q
+
+  build:
+    name: Build package
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build sdist and wheel
+        run: uv build --python 3.12
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: dist/*
