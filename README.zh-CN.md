@@ -5,19 +5,19 @@
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-> SOCKS5 server with async Python addon hooks.
+> 带 async Python addon hooks 的 SOCKS5 server。
 
-**[中文](README.zh-CN.md)**
+**[English](README.md)**
 
 ## Overview
 
-asyncio-socks-server is a SOCKS5 server built around async hooks. The core handles protocol parsing, relay, and hook dispatch. Addons handle authentication, routing, data transformation, logging, and stats.
+asyncio-socks-server 是一个基于 async hook 的 SOCKS5 server。核心只处理协议解析、中继和 hook 调度。认证、路由、数据变换、日志和统计由 addon 处理。
 
-Design:
+设计：
 
-- **Three hook models**: competitive, pipeline, observational
-- **Chain proxying is an addon**: TCP uses `ChainRouter`; UDP uses UDP-over-TCP entry and exit components
-- **No runtime dependencies**: Python stdlib only
+- **三种 hook 模型**：竞争型、管道型、观察型
+- **链式代理是 addon**：TCP 使用 `ChainRouter`，UDP 使用 UDP-over-TCP 入口和出口组件
+- **无运行时依赖**：仅 Python 标准库
 
 ## Architecture
 
@@ -40,33 +40,33 @@ UDP ASSOCIATE ───────▶ handshake
                           └─ UdpOverTcpEntry ──▶ TCP frames ──▶ exit node
 ```
 
-Modules: **core** (protocol), **server** (handshake/relay/lifecycle), **client** (SOCKS5 client), **addons** (hooks and built-ins). See [docs/architecture.md](docs/architecture.md).
+模块：**core**（协议）、**server**（握手/relay/生命周期）、**client**（SOCKS5 client）、**addons**（hooks 和内置 addon）。详见 [docs/architecture.zh-CN.md](docs/architecture.zh-CN.md)。
 
 ## Capabilities
 
-- 8 async hooks for auth, connection routing, data handling, and lifecycle
-- TCP chain proxying through `ChainRouter`
-- UDP chaining through `UdpOverTcpEntry` and `UdpOverTcpExitServer`
-- Per-flow identity and byte counters through `Flow`
-- Optional local JSON stats API through `StatsServer`
-- Shared-socket UDP relay with TTL route cleanup
-- IPv6 dual-stack listener and Happy Eyeballs-style client fallback
-- Python stdlib runtime
+- 8 个 async hook：认证、连接路由、数据处理、生命周期
+- TCP 链式代理：`ChainRouter`
+- UDP 链式代理：`UdpOverTcpEntry` 和 `UdpOverTcpExitServer`
+- 每连接身份和字节计数：`Flow`
+- 本地 JSON stats API：`StatsServer`
+- 共享 socket UDP relay，TTL 清理路由
+- IPv6 双栈监听，客户端 Happy Eyeballs 风格 fallback
+- Python 标准库运行时
 
 ## API Status
 
-The 1.x API is the package root: `Server`, `Addon`, `Address`, `Flow`,
-`ChainRouter`, `StatsServer`, `connect`, and related types.
+1.x API 以包根导出为准：`Server`、`Addon`、`Address`、`Flow`、
+`ChainRouter`、`StatsServer`、`connect` 及相关类型。
 
-See [docs/public-api.md](docs/public-api.md).
+见 [docs/public-api.zh-CN.md](docs/public-api.zh-CN.md)。
 
 ## Quick Start
 
 ### CLI
 
 ```shell
-asyncio_socks_server                              # basic proxy
-asyncio_socks_server --auth user:pass --port 9050 # with auth
+asyncio_socks_server                              # 基础代理
+asyncio_socks_server --auth user:pass --port 9050 # 带认证
 ```
 
 ### Python API
@@ -78,7 +78,7 @@ server = Server(host="::", port=1080)
 server.run()
 ```
 
-With addons:
+使用 addon：
 
 ```python
 from asyncio_socks_server import ChainRouter, Server, StatsServer
@@ -92,11 +92,11 @@ server = Server(
 server.run()
 ```
 
-Addon order is list order. Hook API: [docs/addon-model.md](docs/addon-model.md).
+Addon 顺序就是列表顺序。Hook API 见 [docs/addon-model.zh-CN.md](docs/addon-model.zh-CN.md)。
 
-### Chain Proxying
+### 链式代理
 
-Each node only knows its next hop:
+每个节点只知道自己的下一跳：
 
 ```python
 # Node A → B → C → Target
@@ -105,20 +105,20 @@ Server(addons=[ChainRouter("C:1080")])  # B
 Server()                                 # C: direct
 ```
 
-UDP chaining:
+UDP 链式：
 
 ```python
-# Entry node
+# 入口节点
 from asyncio_socks_server import UdpOverTcpEntry
 server = Server(addons=[UdpOverTcpEntry("exit-host:9020")])
 
-# Exit node (standalone TCP service)
+# 出口节点（独立 TCP 服务）
 from asyncio_socks_server import UdpOverTcpExitServer
 exit_srv = UdpOverTcpExitServer(host="::", port=9020)
 exit_srv.run()
 ```
 
-### Client Library
+### 客户端库
 
 ```python
 from asyncio_socks_server import connect, Address
@@ -134,7 +134,7 @@ data = await conn.reader.read(4096)
 
 ## Build
 
-Python 3.12+. Development uses [uv](https://docs.astral.sh/uv/).
+Python 3.12+。开发环境使用 [uv](https://docs.astral.sh/uv/)。
 
 ```shell
 git clone https://github.com/Amaindex/asyncio-socks-server.git
@@ -142,19 +142,19 @@ cd asyncio-socks-server
 uv sync
 ```
 
-Development:
+开发命令：
 
 ```shell
 uv run ruff check .          # lint
-uv run ruff format --check . # format check
-uv run pytest tests/ -v      # test (260 cases)
-uv run pyright src/           # type check
-uv build                     # package build
+uv run ruff format --check . # 格式检查
+uv run pytest tests/ -v      # 测试（260 用例）
+uv run pyright src/           # 类型检查
+uv build                     # 包构建
 ```
 
 ## Public API
 
-Stable imports live at the package root:
+稳定导入面是包根：
 
 ```python
 from asyncio_socks_server import (
@@ -177,22 +177,22 @@ from asyncio_socks_server import (
 )
 ```
 
-Submodules are importable. Root exports are the compatibility contract.
+子模块可以导入。兼容性承诺以包根导出为准。
 
 ## Configuration
 
-No config files.
+不使用配置文件。
 
-CLI mode (basic proxy):
+CLI 模式（基础代理）：
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--host` | `::` | Bind address |
-| `--port` | `1080` | Bind port |
-| `--auth` | None | `username:password` |
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--host` | `::` | 监听地址 |
+| `--port` | `1080` | 监听端口 |
+| `--auth` | 无 | `username:password` |
 | `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
 
-For addons or custom behavior, instantiate `Server` from Python. See [docs/addon-model.md](docs/addon-model.md).
+需要 addon 或自定义行为时，直接在 Python 中实例化 `Server`。详见 [docs/addon-model.zh-CN.md](docs/addon-model.zh-CN.md)。
 
 ## Deployment
 
@@ -200,31 +200,31 @@ For addons or custom behavior, instantiate `Server` from Python. See [docs/addon
 pip install asyncio-socks-server
 ```
 
-Docker:
+Docker：
 
 ```shell
 docker run --rm -p 1080:1080 amaindex/asyncio-socks-server
 ```
 
-PyPI and Docker Hub artifacts are published from GitHub releases.
+PyPI 和 Docker Hub 产物从 GitHub Release 发布。
 
 ## Release and CI
 
-GitHub Actions runs lint, format check, pyright, package build, and tests for pull requests and pushes to `main`. Tests run on Python 3.12 and 3.13.
+GitHub Actions 在 pull request 和 push to `main` 时运行 lint、format check、pyright、包构建和测试。测试覆盖 Python 3.12 和 3.13。
 
-Release workflow:
+发布流程：
 
-1. Create a GitHub Release from a tag such as `v1.0.0`.
-2. The release workflow builds and publishes the Python package.
-3. The Docker workflow builds and pushes the image when Docker Hub credentials are configured.
+1. 从 tag（例如 `v1.0.0`）创建 GitHub Release。
+2. Release workflow 构建并发布 Python package。
+3. Docker workflow 构建 image；配置 Docker Hub 凭据后推送。
 
 ## Documentation
 
-| Doc | Content |
-|-----|---------|
-| [Architecture](docs/architecture.md) | Component relationships, data flow diagrams, UDP relay design, Flow context, design decisions |
-| [Addon Model](docs/addon-model.md) | Hook API reference, execution models, chain proxying, StatsServer, custom addon patterns |
-| [Public API](docs/public-api.md) | 1.x compatibility surface, root exports, hook contracts, Stats API |
+| 文档 | 内容 |
+|------|------|
+| [架构设计](docs/architecture.zh-CN.md) | 组件关系、数据流时序、UDP relay 设计、Flow context、设计决策 |
+| [Addon 模型](docs/addon-model.zh-CN.md) | Hook API 参考、执行模型、链式代理原理、StatsServer、自定义 addon 示例 |
+| [公共 API](docs/public-api.zh-CN.md) | 1.x 兼容面、包根导出、hook 契约、Stats API |
 
 ## License
 
