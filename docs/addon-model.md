@@ -1,8 +1,11 @@
 # Addon Model
 
-[README](../README.md) · [Architecture](architecture.md) · [Public API](public-api.md) · [简体中文](addon-model.zh-CN.md)
+[README](../README.md) · [Architecture](architecture.md) · [Addon recipes](addon-recipes.md) · [Public API](public-api.md) · [简体中文](addon-model.zh-CN.md)
 
 Addons are Python classes with optional async methods. The server calls them at defined points in the SOCKS5 flow.
+
+This document explains dispatch semantics. If you already know what you want to
+build, start with [Addon recipes](addon-recipes.md).
 
 ## Execution Models
 
@@ -132,6 +135,23 @@ This keeps teardown and monitoring isolated from individual addon failures.
 
 ## Built-in Addons
 
+| Addon | Primary role | Starts network listeners |
+|-------|--------------|--------------------------|
+| `ChainRouter` | TCP next-hop routing | No |
+| `UdpOverTcpEntry` | UDP-over-TCP entry routing | No |
+| `UdpOverTcpExitServer` | UDP-over-TCP exit service | Yes, as a separate server |
+| `FlowStats` | Runtime counters and active flow snapshots | No |
+| `FlowAudit` | Closed-flow usage audit window | No |
+| `StatsAPI` | Optional HTTP presentation for stats and audit | Yes, only when added |
+| `StatsServer` | Backward-compatible name for `StatsAPI` | Yes, only when added |
+| `TrafficCounter` | Minimal closed-flow byte totals | No |
+| `FileAuth` | Username/password auth from JSON | No |
+| `IPFilter` | Source IP allow/block policy | No |
+| `Logger` | Connection and data logging | No |
+
+All built-in addons are opt-in. CLI mode starts a direct SOCKS5 server; addon
+composition is configured from Python.
+
 ### ChainRouter — TCP Chain Proxying
 
 ```python
@@ -252,11 +272,15 @@ Put `FlowStats` or owning `StatsAPI` early in the addon list. It observes flow s
 ### FileAuth — Multi-user Auth
 
 Reads a JSON file mapping usernames to passwords. Caches after first load.
+`FileAuth` is consulted only when the server negotiates username/password auth,
+so configure `Server(auth=...)` when using it.
 
 ### IPFilter — Source IP Access Control
 
 ```python
-IPFilter(allowed=["10.0.0.0/24"], blocked=["10.0.0.5"])
+IPFilter(allowed=["10.0.0.0/24"])
+# or
+IPFilter(blocked=["10.0.0.5"])
 ```
 
 Reads `flow.src.host` in `on_connect`. Denied connections receive SOCKS5 `CONNECTION_NOT_ALLOWED` reply.

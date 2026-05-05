@@ -1,6 +1,6 @@
 # 架构与数据流
 
-[README](../README.zh-CN.md) · [Addon 模型](addon-model.zh-CN.md) · [公共 API](public-api.zh-CN.md) · [English](architecture.md)
+[README](../README.zh-CN.md) · [Addon recipes](addon-recipes.zh-CN.md) · [Addon 模型](addon-model.zh-CN.md) · [公共 API](public-api.zh-CN.md) · [English](architecture.md)
 
 核心处理协议解析、中继和 hook 调度。Addon 处理策略和路由。链式代理、流量统计、访问控制都是 addon 行为。
 

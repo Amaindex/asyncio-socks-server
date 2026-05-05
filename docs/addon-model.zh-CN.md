@@ -1,8 +1,11 @@
 # Addon 模型
 
-[README](../README.zh-CN.md) · [架构](architecture.zh-CN.md) · [公共 API](public-api.zh-CN.md) · [English](addon-model.md)
+[README](../README.zh-CN.md) · [架构](architecture.zh-CN.md) · [Addon recipes](addon-recipes.zh-CN.md) · [公共 API](public-api.zh-CN.md) · [English](addon-model.md)
 
 Addon 是包含可选 async 方法的 Python 类。Server 在 SOCKS5 流程的固定位置调用它们。
+
+本文解释派发语义。如果你已经知道自己想搭建什么，先看
+[Addon recipes](addon-recipes.zh-CN.md)。
 
 ## 执行模型
 
@@ -132,6 +135,23 @@ on_flow_close(flow):
 
 ## 内置 Addon
 
+| Addon | 主要角色 | 是否启动网络 listener |
+|-------|----------|-----------------------|
+| `ChainRouter` | TCP 下一跳路由 | 否 |
+| `UdpOverTcpEntry` | UDP-over-TCP 入口路由 | 否 |
+| `UdpOverTcpExitServer` | UDP-over-TCP 出口服务 | 是，作为独立 server |
+| `FlowStats` | 运行计数和活跃 flow 快照 | 否 |
+| `FlowAudit` | 已关闭 flow 的用量审计窗口 | 否 |
+| `StatsAPI` | stats/audit 的可选 HTTP 展示层 | 是，只有加入 addon 列表才启动 |
+| `StatsServer` | `StatsAPI` 的向后兼容名称 | 是，只有加入 addon 列表才启动 |
+| `TrafficCounter` | 最小的已关闭 flow 字节汇总 | 否 |
+| `FileAuth` | JSON 用户名/密码认证 | 否 |
+| `IPFilter` | 来源 IP allow/block 策略 | 否 |
+| `Logger` | 连接和数据日志 | 否 |
+
+所有内置 addon 都是显式 opt-in。CLI 模式启动直连 SOCKS5 server；addon
+组合通过 Python 配置。
+
 ### ChainRouter — TCP 链式代理
 
 ```python
@@ -249,12 +269,16 @@ server = Server(addons=[StatsAPI(host="127.0.0.1", port=9900)])
 
 ### FileAuth — 多用户认证
 
-从 JSON 文件读取用户名/密码映射。首次加载后缓存。
+从 JSON 文件读取用户名/密码映射。首次加载后缓存。只有 server 协商
+username/password auth 时才会调用 `FileAuth`，因此使用它时需要配置
+`Server(auth=...)`。
 
 ### IPFilter — 源 IP 访问控制
 
 ```python
-IPFilter(allowed=["10.0.0.0/24"], blocked=["10.0.0.5"])
+IPFilter(allowed=["10.0.0.0/24"])
+# 或
+IPFilter(blocked=["10.0.0.5"])
 ```
 
 在 `on_connect` 中读取 `flow.src.host`。被拒绝的连接收到 SOCKS5 `CONNECTION_NOT_ALLOWED` 回复。

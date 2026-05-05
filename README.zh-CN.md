@@ -7,7 +7,7 @@
 
 带 async Python addon hooks 的 SOCKS5 server。
 
-[文档](#文档) · [架构](docs/architecture.zh-CN.md) · [Addon 模型](docs/addon-model.zh-CN.md) · [公共 API](docs/public-api.zh-CN.md) · [English](README.md)
+[文档](#文档) · [架构](docs/architecture.zh-CN.md) · [Addon recipes](docs/addon-recipes.zh-CN.md) · [Addon 模型](docs/addon-model.zh-CN.md) · [公共 API](docs/public-api.zh-CN.md) · [English](README.md)
 
 ## 安装
 
@@ -46,10 +46,20 @@ from asyncio_socks_server import Server
 Server(host="::", port=1080).run()
 ```
 
-使用 addon：
+Addon 是可选的。只添加你需要的行为：
+
+| 目标 | Addons |
+|------|--------|
+| 运行计数和活跃 flows | `FlowStats` + `StatsAPI` |
+| 已关闭 flow 的用量审计 | `FlowAudit` + `StatsAPI` |
+| TCP 链式代理 | `ChainRouter` |
+| UDP 链式代理 | `UdpOverTcpEntry` + `UdpOverTcpExitServer` |
+| 认证、来源策略、日志 | `FileAuth`、`IPFilter`、`Logger` |
+
+运行计数和审计 API：
 
 ```python
-from asyncio_socks_server import ChainRouter, FlowAudit, FlowStats, Server, StatsAPI
+from asyncio_socks_server import FlowAudit, FlowStats, Server, StatsAPI
 
 audit = FlowAudit()
 stats = FlowStats()
@@ -58,7 +68,6 @@ server = Server(
         audit,
         stats,
         StatsAPI(stats=stats, audit=audit, host="127.0.0.1", port=9900),
-        ChainRouter("10.0.0.5:1080"),
     ],
 )
 server.run()
@@ -72,6 +81,8 @@ Addon 顺序就是执行顺序。内置 addon 都是显式 opt-in；只有加入
 `StatsAPI` 使用一个小型本地 HTTP API。
 `FlowAudit` 在内存中记录已关闭 flow 的用量，可通过 `StatsAPI`
 暴露类似 Kafra 的用量审计摘要。
+
+按目标组合 addon 的例子见 [Addon recipes](docs/addon-recipes.zh-CN.md)。
 
 ## 模型
 
@@ -170,6 +181,7 @@ from asyncio_socks_server import (
 | 文档 | 范围 |
 |------|------|
 | [架构](docs/architecture.zh-CN.md) | 核心流程、relay 设计、UDP-over-TCP、Flow context |
+| [Addon recipes](docs/addon-recipes.zh-CN.md) | 按目标组合 addon 的示例 |
 | [Addon 模型](docs/addon-model.zh-CN.md) | Hook 契约、调度语义、内置 addon |
 | [公共 API](docs/public-api.zh-CN.md) | 1.x 兼容面 |
 
@@ -190,7 +202,7 @@ uv build
 
 GitHub Actions 测试 Python 3.12 和 3.13，构建 Python package，并构建 Docker images。
 
-从 `v1.1.0` 这样的 tag 创建 GitHub Release。Release workflow 发布 Python package。Docker workflow 发布 semver image tags。
+从 `v1.3.0` 这样的 tag 创建 GitHub Release。Release workflow 发布 Python package。Docker workflow 发布 semver image tags。
 
 ## License
 

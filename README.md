@@ -7,7 +7,7 @@
 
 SOCKS5 server with async Python addon hooks.
 
-[Docs](#docs) · [Architecture](docs/architecture.md) · [Addon model](docs/addon-model.md) · [Public API](docs/public-api.md) · [简体中文](README.zh-CN.md)
+[Docs](#docs) · [Architecture](docs/architecture.md) · [Addon recipes](docs/addon-recipes.md) · [Addon model](docs/addon-model.md) · [Public API](docs/public-api.md) · [简体中文](README.zh-CN.md)
 
 ## Install
 
@@ -46,10 +46,20 @@ from asyncio_socks_server import Server
 Server(host="::", port=1080).run()
 ```
 
-With addons:
+Addons are optional. Add only the behavior you need:
+
+| Goal | Addons |
+|------|--------|
+| Runtime counters and active flows | `FlowStats` + `StatsAPI` |
+| Closed-flow usage audit | `FlowAudit` + `StatsAPI` |
+| TCP chain proxying | `ChainRouter` |
+| UDP chain proxying | `UdpOverTcpEntry` + `UdpOverTcpExitServer` |
+| Auth, source policy, logs | `FileAuth`, `IPFilter`, `Logger` |
+
+Runtime counters and audit API:
 
 ```python
-from asyncio_socks_server import ChainRouter, FlowAudit, FlowStats, Server, StatsAPI
+from asyncio_socks_server import FlowAudit, FlowStats, Server, StatsAPI
 
 audit = FlowAudit()
 stats = FlowStats()
@@ -58,7 +68,6 @@ server = Server(
         audit,
         stats,
         StatsAPI(stats=stats, audit=audit, host="127.0.0.1", port=9900),
-        ChainRouter("10.0.0.5:1080"),
     ],
 )
 server.run()
@@ -71,6 +80,8 @@ is what starts an HTTP listener.
 methods directly, or pair it with `StatsAPI` for a small local HTTP API.
 `FlowAudit` records closed-flow usage in memory and can be exposed through
 `StatsAPI` for Kafra-like usage audit summaries.
+
+For task-oriented examples, see [Addon recipes](docs/addon-recipes.md).
 
 ## Model
 
@@ -169,6 +180,7 @@ Root exports are the 1.x compatibility contract. Submodules remain importable.
 | Document | Scope |
 |----------|-------|
 | [Architecture](docs/architecture.md) | Core flow, relay design, UDP-over-TCP, Flow context |
+| [Addon recipes](docs/addon-recipes.md) | Goal-oriented addon combinations |
 | [Addon model](docs/addon-model.md) | Hook contracts, dispatch semantics, built-in addons |
 | [Public API](docs/public-api.md) | 1.x compatibility surface |
 
@@ -189,7 +201,7 @@ uv build
 
 GitHub Actions tests Python 3.12 and 3.13, builds the Python package, and builds Docker images.
 
-Create a GitHub Release from a tag such as `v1.1.0`. The release workflow publishes the Python package. The Docker workflow publishes semver image tags.
+Create a GitHub Release from a tag such as `v1.3.0`. The release workflow publishes the Python package. The Docker workflow publishes semver image tags.
 
 ## License
 
