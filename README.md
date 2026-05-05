@@ -18,7 +18,7 @@ pip install asyncio-socks-server
 Docker images are versioned:
 
 ```shell
-docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.0.1
+docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.1.0
 ```
 
 ## Run
@@ -49,11 +49,12 @@ Server(host="::", port=1080).run()
 With addons:
 
 ```python
-from asyncio_socks_server import ChainRouter, Server, StatsServer
+from asyncio_socks_server import ChainRouter, FlowStats, Server
 
+stats = FlowStats()
 server = Server(
     addons=[
-        StatsServer(host="127.0.0.1", port=9900),
+        stats,
         ChainRouter("10.0.0.5:1080"),
     ],
 )
@@ -61,6 +62,9 @@ server.run()
 ```
 
 Addon order is execution order.
+
+`FlowStats` has no network side effects. Use its `snapshot()` and `flows()`
+methods to build your own HTTP API, metrics exporter, or logging pipeline.
 
 ## Model
 
@@ -78,7 +82,8 @@ Built-ins:
 
 - `ChainRouter` for TCP chain proxying
 - `UdpOverTcpEntry` and `UdpOverTcpExitServer` for UDP chain proxying
-- `StatsServer` for low-frequency local JSON stats
+- `FlowStats` for in-memory flow statistics
+- `StatsServer` as a simple compatibility HTTP wrapper around `FlowStats`
 - `TrafficCounter`, `FileAuth`, `IPFilter`, `Logger`
 
 ## Architecture sketch
@@ -138,6 +143,7 @@ from asyncio_socks_server import (
     Address,
     ChainRouter,
     Flow,
+    FlowStats,
     Server,
     StatsServer,
     UdpOverTcpEntry,
@@ -173,7 +179,7 @@ uv build
 
 GitHub Actions tests Python 3.12 and 3.13, builds the Python package, and builds Docker images.
 
-Create a GitHub Release from a tag such as `v1.0.1`. The release workflow publishes the Python package. The Docker workflow publishes semver image tags.
+Create a GitHub Release from a tag such as `v1.1.0`. The release workflow publishes the Python package. The Docker workflow publishes semver image tags.
 
 ## License
 

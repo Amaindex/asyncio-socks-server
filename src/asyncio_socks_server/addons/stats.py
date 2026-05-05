@@ -5,22 +5,222 @@ import json
 import time
 from collections import deque
 from dataclasses import asdict
+from datetime import UTC, datetime
 from typing import Any
 
 from asyncio_socks_server.addons.base import Addon
 from asyncio_socks_server.core.types import Flow
 
 
+class FlowStats(Addon):
+    """Flow statistics collector with no network side effects.
+
+    FlowStats is the reusable stats infrastructure. It implements addon hooks,
+    keeps in-memory flow counters, and exposes plain Python snapshot methods.
+    Applications can attach their own HTTP API, metrics exporter, file writer,
+    or any other presentation layer around it.
+    """
+
+    def __init__(
+        self,
+        max_closed_flows: int = 100,
+        max_recent_errors: int = 50,
+    ) -> None:
+        self.max_closed_flows = max_closed_flows
+        self.max_recent_errors = max_recent_errors
+        self._started_at = time.monotonic()
+        self._started_wall_at = time.time()
+        self._active: dict[int, Flow] = {}
+        self._seen_flow_ids: set[int] = set()
+        self._closed: deque[dict[str, Any]] = deque(maxlen=max_closed_flows)
+        self._recent_errors: deque[dict[str, Any]] = deque(maxlen=max_recent_errors)
+        self.total_flows = 0
+        self.total_tcp_flows = 0
+        self.total_udp_flows = 0
+        self.total_closed_flows = 0
+        self.closed_bytes_up = 0
+        self.closed_bytes_down = 0
+        self.total_errors = 0
+        self.errors_by_type: dict[str, int] = {}
+        self._last_total_sample_at = self._started_at
+        self._last_total_bytes_up = 0
+        self._last_total_bytes_down = 0
+        self._upload_rate = 0.0
+        self._download_rate = 0.0
+        self._flow_rates: dict[int, dict[str, float]] = {}
+
+    async def on_connect(self, flow: Flow) -> None:
+        self._track_flow(flow)
+
+    async def on_udp_associate(self, flow: Flow) -> None:
+        self._track_flow(flow)
+
+    async def on_flow_close(self, flow: Flow) -> None:
+        if flow.id not in self._seen_flow_ids:
+            self._track_flow(flow)
+        self._sample_flow_rate(flow)
+        self._active.pop(flow.id, None)
+        self._closed.append(self._flow_snapshot(flow, state="closed"))
+        self.total_closed_flows += 1
+        self.closed_bytes_up += flow.bytes_up
+        self.closed_bytes_down += flow.bytes_down
+        self._flow_rates.pop(flow.id, None)
+
+    async def on_error(self, error: Exception) -> None:
+        name = type(error).__name__
+        self.total_errors += 1
+        self.errors_by_type[name] = self.errors_by_type.get(name, 0) + 1
+        self._recent_errors.append(
+            {
+                "type": name,
+                "message": str(error),
+                "at": self._format_wall_time(time.time()),
+            }
+        )
+
+    def snapshot(self) -> dict[str, Any]:
+        """Return aggregate counters plus active flow snapshots."""
+        self._sample_rates()
+        active_bytes_up = sum(flow.bytes_up for flow in self._active.values())
+        active_bytes_down = sum(flow.bytes_down for flow in self._active.values())
+        return {
+            "started_at": self._format_wall_time(self._started_wall_at),
+            "uptime_seconds": self._duration(self._started_at),
+            "active_flows": len(self._active),
+            "closed_flows": len(self._closed),
+            "recent_closed_flows": len(self._closed),
+            "total_closed_flows": self.total_closed_flows,
+            "total_flows": self.total_flows,
+            "total_tcp_flows": self.total_tcp_flows,
+            "total_udp_flows": self.total_udp_flows,
+            "active_bytes_up": active_bytes_up,
+            "active_bytes_down": active_bytes_down,
+            "closed_bytes_up": self.closed_bytes_up,
+            "closed_bytes_down": self.closed_bytes_down,
+            "total_bytes_up": self.closed_bytes_up + active_bytes_up,
+            "total_bytes_down": self.closed_bytes_down + active_bytes_down,
+            "upload_rate": self._upload_rate,
+            "download_rate": self._download_rate,
+            "errors": self.errors(),
+            "active": self._active_flow_snapshots(),
+        }
+
+    def active_flows(self) -> list[dict[str, Any]]:
+        """Return active flow snapshots."""
+        self._sample_rates()
+        return self._active_flow_snapshots()
+
+    def _active_flow_snapshots(self) -> list[dict[str, Any]]:
+        return [
+            self._flow_snapshot(flow, state="active") for flow in self._active.values()
+        ]
+
+    def recent_closed_flows(self) -> list[dict[str, Any]]:
+        """Return retained closed flow snapshots."""
+        return list(self._closed)
+
+    def flows(self) -> dict[str, Any]:
+        """Return active and retained closed flow snapshots."""
+        return {
+            "active": self.active_flows(),
+            "recent_closed": self.recent_closed_flows(),
+        }
+
+    def errors(self) -> dict[str, Any]:
+        """Return error counters observed through on_error."""
+        return {
+            "total": self.total_errors,
+            "by_type": dict(sorted(self.errors_by_type.items())),
+            "recent": list(self._recent_errors),
+        }
+
+    def _track_flow(self, flow: Flow) -> None:
+        self._active[flow.id] = flow
+        if flow.id in self._seen_flow_ids:
+            return
+        self._seen_flow_ids.add(flow.id)
+        self._flow_rates[flow.id] = {
+            "sample_at": time.monotonic(),
+            "bytes_up": float(flow.bytes_up),
+            "bytes_down": float(flow.bytes_down),
+            "upload_rate": 0.0,
+            "download_rate": 0.0,
+        }
+        self.total_flows += 1
+        if flow.protocol == "tcp":
+            self.total_tcp_flows += 1
+        else:
+            self.total_udp_flows += 1
+
+    def _flow_snapshot(self, flow: Flow, state: str) -> dict[str, Any]:
+        rates = self._flow_rates.get(flow.id, {})
+        return {
+            "id": flow.id,
+            "state": state,
+            "src": asdict(flow.src),
+            "dst": asdict(flow.dst),
+            "protocol": flow.protocol,
+            "started_at": self._format_wall_time(flow.started_wall_at),
+            "age_seconds": self._duration(flow.started_at),
+            "bytes_up": flow.bytes_up,
+            "bytes_down": flow.bytes_down,
+            "upload_rate": rates.get("upload_rate", 0.0),
+            "download_rate": rates.get("download_rate", 0.0),
+        }
+
+    def _sample_rates(self) -> None:
+        for flow in self._active.values():
+            self._sample_flow_rate(flow)
+
+        now = time.monotonic()
+        active_bytes_up = sum(flow.bytes_up for flow in self._active.values())
+        active_bytes_down = sum(flow.bytes_down for flow in self._active.values())
+        total_bytes_up = self.closed_bytes_up + active_bytes_up
+        total_bytes_down = self.closed_bytes_down + active_bytes_down
+        elapsed = now - self._last_total_sample_at
+        if elapsed > 0:
+            self._upload_rate = (total_bytes_up - self._last_total_bytes_up) / elapsed
+            self._download_rate = (
+                total_bytes_down - self._last_total_bytes_down
+            ) / elapsed
+        self._last_total_sample_at = now
+        self._last_total_bytes_up = total_bytes_up
+        self._last_total_bytes_down = total_bytes_down
+
+    def _sample_flow_rate(self, flow: Flow) -> None:
+        now = time.monotonic()
+        sample = self._flow_rates.setdefault(
+            flow.id,
+            {
+                "sample_at": now,
+                "bytes_up": float(flow.bytes_up),
+                "bytes_down": float(flow.bytes_down),
+                "upload_rate": 0.0,
+                "download_rate": 0.0,
+            },
+        )
+        elapsed = now - sample["sample_at"]
+        if elapsed > 0:
+            sample["upload_rate"] = (flow.bytes_up - sample["bytes_up"]) / elapsed
+            sample["download_rate"] = (flow.bytes_down - sample["bytes_down"]) / elapsed
+        sample["sample_at"] = now
+        sample["bytes_up"] = float(flow.bytes_up)
+        sample["bytes_down"] = float(flow.bytes_down)
+
+    @staticmethod
+    def _format_wall_time(timestamp: float) -> str:
+        return datetime.fromtimestamp(timestamp, UTC).isoformat().replace("+00:00", "Z")
+
+    @staticmethod
+    def _duration(started_at: float) -> float:
+        return round(time.monotonic() - started_at, 6)
+
+
 class StatsServer(Addon):
-    """Small HTTP stats server backed by live Flow objects.
+    """Compatibility HTTP wrapper around FlowStats.
 
-    The server exposes JSON endpoints:
-    - GET /health: liveness response
-    - GET /stats: aggregate counters and active flow snapshots
-    - GET /flows: active and recent closed flow snapshots
-
-    Put this addon early in the addon list so competitive hooks can observe
-    flows before another addon wins.
+    Prefer using FlowStats directly and building the presentation layer in the
+    application. This wrapper remains available for simple local inspection.
     """
 
     def __init__(
@@ -32,16 +232,8 @@ class StatsServer(Addon):
         self.host = host
         self.port = port
         self.max_closed_flows = max_closed_flows
+        self.stats = FlowStats(max_closed_flows=max_closed_flows)
         self._server: asyncio.AbstractServer | None = None
-        self._started_at = time.monotonic()
-        self._active: dict[int, Flow] = {}
-        self._seen_flow_ids: set[int] = set()
-        self._closed: deque[dict[str, Any]] = deque(maxlen=max_closed_flows)
-        self.total_flows = 0
-        self.total_tcp_flows = 0
-        self.total_udp_flows = 0
-        self.total_bytes_up = 0
-        self.total_bytes_down = 0
 
     async def on_start(self) -> None:
         self._server = await asyncio.start_server(
@@ -61,35 +253,19 @@ class StatsServer(Addon):
         self._server = None
 
     async def on_connect(self, flow: Flow) -> None:
-        self._track_flow(flow)
+        await self.stats.on_connect(flow)
 
     async def on_udp_associate(self, flow: Flow) -> None:
-        self._track_flow(flow)
+        await self.stats.on_udp_associate(flow)
 
     async def on_flow_close(self, flow: Flow) -> None:
-        if flow.id not in self._seen_flow_ids:
-            self._track_flow(flow)
-        self._active.pop(flow.id, None)
-        self._closed.append(self._flow_snapshot(flow, state="closed"))
-        self.total_bytes_up += flow.bytes_up
-        self.total_bytes_down += flow.bytes_down
+        await self.stats.on_flow_close(flow)
+
+    async def on_error(self, error: Exception) -> None:
+        await self.stats.on_error(error)
 
     def snapshot(self) -> dict[str, Any]:
-        """Return the same aggregate payload served by GET /stats."""
-        return {
-            "uptime_seconds": self._duration(self._started_at),
-            "active_flows": len(self._active),
-            "closed_flows": len(self._closed),
-            "total_flows": self.total_flows,
-            "total_tcp_flows": self.total_tcp_flows,
-            "total_udp_flows": self.total_udp_flows,
-            "total_bytes_up": self.total_bytes_up,
-            "total_bytes_down": self.total_bytes_down,
-            "active": [
-                self._flow_snapshot(flow, state="active")
-                for flow in self._active.values()
-            ],
-        }
+        return self.stats.snapshot()
 
     async def _handle_http(
         self,
@@ -109,19 +285,9 @@ class StatsServer(Addon):
             elif path == "/health":
                 await self._write_json(writer, 200, {"ok": True})
             elif path == "/stats":
-                await self._write_json(writer, 200, self.snapshot())
+                await self._write_json(writer, 200, self.stats.snapshot())
             elif path == "/flows":
-                await self._write_json(
-                    writer,
-                    200,
-                    {
-                        "active": [
-                            self._flow_snapshot(flow, state="active")
-                            for flow in self._active.values()
-                        ],
-                        "recent_closed": list(self._closed),
-                    },
-                )
+                await self._write_json(writer, 200, self.stats.flows())
             else:
                 await self._write_json(writer, 404, {"error": "not found"})
         except (ConnectionError, OSError, ValueError):
@@ -154,30 +320,3 @@ class StatsServer(Addon):
             + body
         )
         await writer.drain()
-
-    def _track_flow(self, flow: Flow) -> None:
-        self._active[flow.id] = flow
-        if flow.id in self._seen_flow_ids:
-            return
-        self._seen_flow_ids.add(flow.id)
-        self.total_flows += 1
-        if flow.protocol == "tcp":
-            self.total_tcp_flows += 1
-        else:
-            self.total_udp_flows += 1
-
-    def _flow_snapshot(self, flow: Flow, state: str) -> dict[str, Any]:
-        return {
-            "id": flow.id,
-            "state": state,
-            "src": asdict(flow.src),
-            "dst": asdict(flow.dst),
-            "protocol": flow.protocol,
-            "age_seconds": self._duration(flow.started_at),
-            "bytes_up": flow.bytes_up,
-            "bytes_down": flow.bytes_down,
-        }
-
-    @staticmethod
-    def _duration(started_at: float) -> float:
-        return round(time.monotonic() - started_at, 6)

@@ -34,7 +34,8 @@ Modules under `asyncio_socks_server.core`,
 | `ChainRouter` | Addon | Route TCP CONNECT through a downstream SOCKS5 proxy |
 | `UdpOverTcpEntry` | Addon | Tunnel UDP ASSOCIATE traffic through a TCP exit service |
 | `UdpOverTcpExitServer` | Server | Exit service for UDP-over-TCP chaining |
-| `StatsServer` | Addon | Low-frequency HTTP JSON stats API |
+| `FlowStats` | Addon | In-memory flow statistics collector |
+| `StatsServer` | Addon | Compatibility HTTP wrapper around FlowStats |
 | `TrafficCounter` | Addon | Aggregate closed-flow byte counters |
 | `FileAuth` | Addon | Username/password auth from JSON |
 | `IPFilter` | Addon | Source IP allow/block rules |
@@ -104,15 +105,29 @@ addresses is unsupported.
 
 ## Stats API
 
-`StatsServer` exposes a stdlib HTTP server:
+`FlowStats` is the stats infrastructure. It has no network side effects and
+exposes plain Python methods:
+
+| Method | Meaning |
+|--------|---------|
+| `snapshot()` | Aggregate counters and active flow snapshots |
+| `flows()` | Active flows and recent closed flow snapshots |
+| `active_flows()` | Active flow snapshots |
+| `recent_closed_flows()` | Retained closed flow snapshots |
+| `errors()` | Error counters observed through `on_error` |
+
+Use `FlowStats` to build an application-specific HTTP API, metrics exporter, or
+logging pipeline. Put it early in the addon list so it can observe flow starts
+before another competitive addon wins.
+
+`StatsServer` remains available as a small compatibility wrapper. It exposes a
+stdlib HTTP server backed by `FlowStats`:
 
 | Endpoint | Meaning |
 |----------|---------|
 | `GET /health` | Liveness response |
-| `GET /stats` | Aggregate counters and active flow snapshots |
-| `GET /flows` | Active flows and recent closed flow snapshots |
-
-The API is for low-frequency local inspection. Put `StatsServer` early in the addon list so it can observe flow starts before another competitive addon wins.
+| `GET /stats` | `FlowStats.snapshot()` |
+| `GET /flows` | `FlowStats.flows()` |
 
 ## CLI Contract
 

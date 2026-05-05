@@ -175,7 +175,27 @@ class TrafficCounter(Addon):
 
 `TrafficCounter` 在 `on_flow_close` 中聚合。`Flow` 已经有累计字节计数，且 UDP 不经过 `on_data`。
 
-### StatsServer — 低频 JSON 统计
+### FlowStats — Flow 统计基础设施
+
+```python
+from asyncio_socks_server import FlowStats, Server
+
+stats = FlowStats()
+server = Server(addons=[stats])
+```
+
+`FlowStats` 没有网络副作用。它通过 addon hooks 记录 flow 生命周期数据，
+并暴露 Python 方法供应用自行决定展示方式：
+
+| 方法 | 内容 |
+|------|------|
+| `snapshot()` | 聚合计数、速率、错误和活跃 flow |
+| `flows()` | 活跃 flow 和最近关闭 flow 快照 |
+| `errors()` | 错误计数和最近错误 |
+
+用 `FlowStats` 搭建自己的 HTTP API、Prometheus exporter、文件审计流或控制面集成。
+
+### StatsServer — 兼容 HTTP Wrapper
 
 ```python
 from asyncio_socks_server import Server, StatsServer
@@ -184,15 +204,15 @@ stats = StatsServer(host="127.0.0.1", port=9900)
 server = Server(addons=[stats])
 ```
 
-`StatsServer` 启动一个标准库 HTTP server：
+`StatsServer` 是基于 `FlowStats` 的简单标准库 HTTP wrapper：
 
 | Endpoint | 内容 |
 |----------|------|
 | `GET /health` | 存活响应 |
-| `GET /stats` | 聚合计数和活跃 flow |
-| `GET /flows` | 活跃 flow 和最近关闭的 flow 快照 |
+| `GET /stats` | `FlowStats.snapshot()` |
+| `GET /flows` | `FlowStats.flows()` |
 
-建议把 `StatsServer` 放在 addon 列表靠前位置。它通过竞争型 hook 观察 flow start。更早胜出的 addon 会让它看不到 start 事件。`on_flow_close` 仍会收到最终 Flow 快照。
+建议把 `FlowStats` 或 `StatsServer` 放在 addon 列表靠前位置。它通过竞争型 hook 观察 flow start。更早胜出的 addon 会让它看不到 start 事件。`on_flow_close` 仍会收到最终 Flow 快照。
 
 ### FileAuth — 多用户认证
 

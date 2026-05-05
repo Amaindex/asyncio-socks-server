@@ -175,7 +175,28 @@ class TrafficCounter(Addon):
 
 `TrafficCounter` aggregates in `on_flow_close`. `Flow` already has cumulative byte counters, and UDP does not pass through `on_data`.
 
-### StatsServer — Low-frequency JSON Stats
+### FlowStats — Flow Statistics Infrastructure
+
+```python
+from asyncio_socks_server import FlowStats, Server
+
+stats = FlowStats()
+server = Server(addons=[stats])
+```
+
+`FlowStats` has no network side effects. It records flow lifecycle data through
+addon hooks and exposes Python methods for application-specific presentation:
+
+| Method | Content |
+|--------|---------|
+| `snapshot()` | Aggregate counters, rates, errors, and active flows |
+| `flows()` | Active flows and recent closed flow snapshots |
+| `errors()` | Error counters and recent errors |
+
+Use `FlowStats` as infrastructure for your own HTTP API, Prometheus exporter,
+file audit stream, or control-plane integration.
+
+### StatsServer — Compatibility HTTP Wrapper
 
 ```python
 from asyncio_socks_server import Server, StatsServer
@@ -184,15 +205,15 @@ stats = StatsServer(host="127.0.0.1", port=9900)
 server = Server(addons=[stats])
 ```
 
-`StatsServer` starts a stdlib HTTP server:
+`StatsServer` is a simple stdlib HTTP wrapper around `FlowStats`:
 
 | Endpoint | Content |
 |----------|---------|
 | `GET /health` | Liveness response |
-| `GET /stats` | Aggregate counters and active flows |
-| `GET /flows` | Active flows and recent closed flow snapshots |
+| `GET /stats` | `FlowStats.snapshot()` |
+| `GET /flows` | `FlowStats.flows()` |
 
-Put `StatsServer` early in the addon list. It observes flow starts through competitive hooks. An earlier winning addon can prevent it from seeing a start event. `on_flow_close` still receives the final Flow snapshot.
+Put `FlowStats` or `StatsServer` early in the addon list. It observes flow starts through competitive hooks. An earlier winning addon can prevent it from seeing a start event. `on_flow_close` still receives the final Flow snapshot.
 
 ### FileAuth — Multi-user Auth
 

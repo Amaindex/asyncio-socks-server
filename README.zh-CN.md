@@ -18,7 +18,7 @@ pip install asyncio-socks-server
 Docker image 使用明确版本：
 
 ```shell
-docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.0.1
+docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.1.0
 ```
 
 ## 运行
@@ -49,11 +49,12 @@ Server(host="::", port=1080).run()
 使用 addon：
 
 ```python
-from asyncio_socks_server import ChainRouter, Server, StatsServer
+from asyncio_socks_server import ChainRouter, FlowStats, Server
 
+stats = FlowStats()
 server = Server(
     addons=[
-        StatsServer(host="127.0.0.1", port=9900),
+        stats,
         ChainRouter("10.0.0.5:1080"),
     ],
 )
@@ -61,6 +62,9 @@ server.run()
 ```
 
 Addon 顺序就是执行顺序。
+
+`FlowStats` 没有网络副作用。使用它的 `snapshot()` 和 `flows()` 方法，
+自行搭建 HTTP API、metrics exporter 或日志管道。
 
 ## 模型
 
@@ -78,7 +82,8 @@ Hook 调度有三种模型：
 
 - `ChainRouter`：TCP 链式代理
 - `UdpOverTcpEntry` 和 `UdpOverTcpExitServer`：UDP 链式代理
-- `StatsServer`：低频本地 JSON stats
+- `FlowStats`：内存 flow 统计
+- `StatsServer`：基于 `FlowStats` 的简单兼容 HTTP wrapper
 - `TrafficCounter`、`FileAuth`、`IPFilter`、`Logger`
 
 ## 架构简图
@@ -138,6 +143,7 @@ from asyncio_socks_server import (
     Address,
     ChainRouter,
     Flow,
+    FlowStats,
     Server,
     StatsServer,
     UdpOverTcpEntry,
@@ -173,7 +179,7 @@ uv build
 
 GitHub Actions 测试 Python 3.12 和 3.13，构建 Python package，并构建 Docker images。
 
-从 `v1.0.1` 这样的 tag 创建 GitHub Release。Release workflow 发布 Python package。Docker workflow 发布 semver image tags。
+从 `v1.1.0` 这样的 tag 创建 GitHub Release。Release workflow 发布 Python package。Docker workflow 发布 semver image tags。
 
 ## License
 

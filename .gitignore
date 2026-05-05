@@ -27,6 +27,7 @@ ax-spec/
 
 # uv
 uv.lock
+.uv-cache/
 
 # IDE
 .idea/

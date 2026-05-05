@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
 from typing import Literal
 
@@ -67,5 +68,6 @@ class Flow:
     dst: Address
     protocol: Literal["tcp", "udp"]
     started_at: float  # time.monotonic()
+    started_wall_at: float = field(default_factory=time.time)
     bytes_up: int = 0  # TCP: post-addon; UDP: raw payload (no addon pipeline)
     bytes_down: int = 0

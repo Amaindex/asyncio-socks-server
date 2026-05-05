@@ -32,7 +32,8 @@ from asyncio_socks_server import Server, Addon, Address, connect
 | `ChainRouter` | Addon | 将 TCP CONNECT 路由到下游 SOCKS5 proxy |
 | `UdpOverTcpEntry` | Addon | 将 UDP ASSOCIATE 流量封装到 TCP exit service |
 | `UdpOverTcpExitServer` | 服务端 | UDP-over-TCP 链式代理的出口服务 |
-| `StatsServer` | Addon | 低频 HTTP JSON stats API |
+| `FlowStats` | Addon | 内存 flow 统计 collector |
+| `StatsServer` | Addon | 基于 FlowStats 的兼容 HTTP wrapper |
 | `TrafficCounter` | Addon | 聚合已关闭 flow 的字节计数 |
 | `FileAuth` | Addon | 从 JSON 文件读取用户名/密码 |
 | `IPFilter` | Addon | 源 IP allow/block 规则 |
@@ -101,15 +102,26 @@ Addon 应把 `Flow` 视为可读上下文。修改字节计数或地址字段不
 
 ## Stats API
 
-`StatsServer` 暴露一个标准库 HTTP server：
+`FlowStats` 是统计基础设施。它没有网络副作用，只暴露 Python 方法：
+
+| 方法 | 含义 |
+|------|------|
+| `snapshot()` | 聚合计数和活跃 flow 快照 |
+| `flows()` | 活跃 flow 和最近关闭 flow 快照 |
+| `active_flows()` | 活跃 flow 快照 |
+| `recent_closed_flows()` | 保留的关闭 flow 快照 |
+| `errors()` | 通过 `on_error` 观察到的错误计数 |
+
+用 `FlowStats` 自行搭建应用需要的 HTTP API、metrics exporter 或日志管道。
+建议把它放在 addon 列表靠前位置，这样它能在其他竞争型 addon 获胜前观察 flow start。
+
+`StatsServer` 作为小型兼容 wrapper 保留。它启动一个基于 `FlowStats` 的标准库 HTTP server：
 
 | Endpoint | 含义 |
 |----------|------|
 | `GET /health` | 存活检查 |
-| `GET /stats` | 聚合计数和活跃 flow 快照 |
-| `GET /flows` | 活跃 flow 和最近关闭 flow 快照 |
-
-该 API 面向低频本地查看。建议把 `StatsServer` 放在 addon 列表靠前位置，这样它能在其他竞争型 addon 获胜前观察 flow start。
+| `GET /stats` | `FlowStats.snapshot()` |
+| `GET /flows` | `FlowStats.flows()` |
 
 ## CLI 契约
 
