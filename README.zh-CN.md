@@ -18,7 +18,7 @@ pip install asyncio-socks-server
 Docker image 使用明确版本：
 
 ```shell
-docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.1.0
+docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.2.0
 ```
 
 ## 运行
@@ -49,22 +49,25 @@ Server(host="::", port=1080).run()
 使用 addon：
 
 ```python
-from asyncio_socks_server import ChainRouter, FlowStats, Server
+from asyncio_socks_server import ChainRouter, FlowStats, Server, StatsAPI
 
 stats = FlowStats()
 server = Server(
     addons=[
         stats,
+        StatsAPI(stats=stats, host="127.0.0.1", port=9900),
         ChainRouter("10.0.0.5:1080"),
     ],
 )
 server.run()
 ```
 
-Addon 顺序就是执行顺序。
+Addon 顺序就是执行顺序。内置 addon 都是显式 opt-in；只有加入
+`StatsAPI` 才会启动 HTTP listener。
 
 `FlowStats` 没有网络副作用。使用它的 `snapshot()` 和 `flows()` 方法，
-自行搭建 HTTP API、metrics exporter 或日志管道。
+可以自行搭建 HTTP API、metrics exporter 或日志管道，也可以搭配
+`StatsAPI` 使用一个小型本地 HTTP API。
 
 ## 模型
 
@@ -83,7 +86,8 @@ Hook 调度有三种模型：
 - `ChainRouter`：TCP 链式代理
 - `UdpOverTcpEntry` 和 `UdpOverTcpExitServer`：UDP 链式代理
 - `FlowStats`：内存 flow 统计
-- `StatsServer`：基于 `FlowStats` 的简单兼容 HTTP wrapper
+- `StatsAPI`：基于 `FlowStats` 的显式 opt-in HTTP API
+- `StatsServer`：`StatsAPI` 的向后兼容名称
 - `TrafficCounter`、`FileAuth`、`IPFilter`、`Logger`
 
 ## 架构简图
@@ -145,6 +149,7 @@ from asyncio_socks_server import (
     Flow,
     FlowStats,
     Server,
+    StatsAPI,
     StatsServer,
     UdpOverTcpEntry,
     UdpOverTcpExitServer,

@@ -35,7 +35,8 @@ Modules under `asyncio_socks_server.core`,
 | `UdpOverTcpEntry` | Addon | Tunnel UDP ASSOCIATE traffic through a TCP exit service |
 | `UdpOverTcpExitServer` | Server | Exit service for UDP-over-TCP chaining |
 | `FlowStats` | Addon | In-memory flow statistics collector |
-| `StatsServer` | Addon | Compatibility HTTP wrapper around FlowStats |
+| `StatsAPI` | Addon | Opt-in HTTP API backed by FlowStats |
+| `StatsServer` | Addon | Backward-compatible name for StatsAPI |
 | `TrafficCounter` | Addon | Aggregate closed-flow byte counters |
 | `FileAuth` | Addon | Username/password auth from JSON |
 | `IPFilter` | Addon | Source IP allow/block rules |
@@ -120,14 +121,25 @@ Use `FlowStats` to build an application-specific HTTP API, metrics exporter, or
 logging pipeline. Put it early in the addon list so it can observe flow starts
 before another competitive addon wins.
 
-`StatsServer` remains available as a small compatibility wrapper. It exposes a
-stdlib HTTP server backed by `FlowStats`:
+`StatsAPI` is the built-in opt-in HTTP presentation addon. It can either own its
+own `FlowStats` instance, or expose a `FlowStats` instance supplied by the
+application:
+
+```python
+from asyncio_socks_server import FlowStats, Server, StatsAPI
+
+stats = FlowStats()
+server = Server(addons=[stats, StatsAPI(stats=stats, host="127.0.0.1", port=9900)])
+```
 
 | Endpoint | Meaning |
 |----------|---------|
 | `GET /health` | Liveness response |
 | `GET /stats` | `FlowStats.snapshot()` |
 | `GET /flows` | `FlowStats.flows()` |
+| `GET /errors` | `FlowStats.errors()` |
+
+`StatsServer` remains available as a backward-compatible name for `StatsAPI`.
 
 ## CLI Contract
 

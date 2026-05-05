@@ -216,11 +216,14 @@ class FlowStats(Addon):
         return round(time.monotonic() - started_at, 6)
 
 
-class StatsServer(Addon):
-    """Compatibility HTTP wrapper around FlowStats.
+class StatsAPI(Addon):
+    """Opt-in HTTP API backed by FlowStats.
 
-    Prefer using FlowStats directly and building the presentation layer in the
-    application. This wrapper remains available for simple local inspection.
+    StatsAPI starts an HTTP listener only when explicitly added to a Server.
+    When constructed without a FlowStats instance, it owns one and forwards flow
+    hooks into it. When constructed with an existing FlowStats instance, it acts
+    only as a presentation layer so applications can compose both addons without
+    double-counting flows.
     """
 
     def __init__(
@@ -228,11 +231,13 @@ class StatsServer(Addon):
         host: str = "127.0.0.1",
         port: int = 0,
         max_closed_flows: int = 100,
+        stats: FlowStats | None = None,
     ) -> None:
         self.host = host
         self.port = port
         self.max_closed_flows = max_closed_flows
-        self.stats = FlowStats(max_closed_flows=max_closed_flows)
+        self.stats = stats or FlowStats(max_closed_flows=max_closed_flows)
+        self._owns_stats = stats is None
         self._server: asyncio.AbstractServer | None = None
 
     async def on_start(self) -> None:
@@ -253,16 +258,20 @@ class StatsServer(Addon):
         self._server = None
 
     async def on_connect(self, flow: Flow) -> None:
-        await self.stats.on_connect(flow)
+        if self._owns_stats:
+            await self.stats.on_connect(flow)
 
     async def on_udp_associate(self, flow: Flow) -> None:
-        await self.stats.on_udp_associate(flow)
+        if self._owns_stats:
+            await self.stats.on_udp_associate(flow)
 
     async def on_flow_close(self, flow: Flow) -> None:
-        await self.stats.on_flow_close(flow)
+        if self._owns_stats:
+            await self.stats.on_flow_close(flow)
 
     async def on_error(self, error: Exception) -> None:
-        await self.stats.on_error(error)
+        if self._owns_stats:
+            await self.stats.on_error(error)
 
     def snapshot(self) -> dict[str, Any]:
         return self.stats.snapshot()
@@ -288,6 +297,8 @@ class StatsServer(Addon):
                 await self._write_json(writer, 200, self.stats.snapshot())
             elif path == "/flows":
                 await self._write_json(writer, 200, self.stats.flows())
+            elif path == "/errors":
+                await self._write_json(writer, 200, self.stats.errors())
             else:
                 await self._write_json(writer, 404, {"error": "not found"})
         except (ConnectionError, OSError, ValueError):
@@ -320,3 +331,7 @@ class StatsServer(Addon):
             + body
         )
         await writer.drain()
+
+
+class StatsServer(StatsAPI):
+    """Backward-compatible name for StatsAPI."""

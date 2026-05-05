@@ -1,7 +1,14 @@
 import asyncio
 import json
 
-from asyncio_socks_server import Address, FlowStats, Server, StatsServer, connect
+from asyncio_socks_server import (
+    Address,
+    FlowStats,
+    Server,
+    StatsAPI,
+    StatsServer,
+    connect,
+)
 
 
 async def _start_server(**kwargs):
@@ -56,12 +63,50 @@ class TestStatsServer:
             await _stop_server(server, task)
 
     async def test_health_endpoint(self):
-        stats = StatsServer()
+        stats = StatsAPI()
         server, task = await _start_server(addons=[stats])
         try:
             status, payload = await _get_json(stats.port, "/health")
             assert status == 200
             assert payload == {"ok": True}
+        finally:
+            await _stop_server(server, task)
+
+    async def test_stats_api_can_present_external_flow_stats_without_double_counting(
+        self,
+        echo_server,
+    ):
+        stats = FlowStats()
+        api = StatsAPI(stats=stats)
+        server, task = await _start_server(addons=[stats, api])
+        conn = None
+        try:
+            conn = await connect(Address(server.host, server.port), echo_server)
+            conn.writer.write(b"external")
+            await conn.writer.drain()
+            data = await conn.reader.read(4096)
+            assert data == b"external"
+
+            status, payload = await _get_json(api.port, "/stats")
+            assert status == 200
+            assert payload["total_flows"] == 1
+            assert stats.snapshot()["total_flows"] == 1
+        finally:
+            if conn is not None:
+                conn.writer.close()
+                await conn.writer.wait_closed()
+            await _stop_server(server, task)
+
+    async def test_errors_endpoint(self):
+        stats = StatsAPI()
+        await stats.on_error(RuntimeError("boom"))
+        server, task = await _start_server(addons=[stats])
+        try:
+            status, payload = await _get_json(stats.port, "/errors")
+            assert status == 200
+            assert payload["total"] == 1
+            assert payload["by_type"] == {"RuntimeError": 1}
+            assert payload["recent"][0]["message"] == "boom"
         finally:
             await _stop_server(server, task)
 

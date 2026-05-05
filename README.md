@@ -18,7 +18,7 @@ pip install asyncio-socks-server
 Docker images are versioned:
 
 ```shell
-docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.1.0
+docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.2.0
 ```
 
 ## Run
@@ -49,22 +49,24 @@ Server(host="::", port=1080).run()
 With addons:
 
 ```python
-from asyncio_socks_server import ChainRouter, FlowStats, Server
+from asyncio_socks_server import ChainRouter, FlowStats, Server, StatsAPI
 
 stats = FlowStats()
 server = Server(
     addons=[
         stats,
+        StatsAPI(stats=stats, host="127.0.0.1", port=9900),
         ChainRouter("10.0.0.5:1080"),
     ],
 )
 server.run()
 ```
 
-Addon order is execution order.
+Addon order is execution order. Built-in addons are opt-in; adding `StatsAPI`
+is what starts an HTTP listener.
 
 `FlowStats` has no network side effects. Use its `snapshot()` and `flows()`
-methods to build your own HTTP API, metrics exporter, or logging pipeline.
+methods directly, or pair it with `StatsAPI` for a small local HTTP API.
 
 ## Model
 
@@ -83,7 +85,8 @@ Built-ins:
 - `ChainRouter` for TCP chain proxying
 - `UdpOverTcpEntry` and `UdpOverTcpExitServer` for UDP chain proxying
 - `FlowStats` for in-memory flow statistics
-- `StatsServer` as a simple compatibility HTTP wrapper around `FlowStats`
+- `StatsAPI` as an opt-in HTTP API around `FlowStats`
+- `StatsServer` as a backward-compatible name for `StatsAPI`
 - `TrafficCounter`, `FileAuth`, `IPFilter`, `Logger`
 
 ## Architecture sketch
@@ -145,6 +148,7 @@ from asyncio_socks_server import (
     Flow,
     FlowStats,
     Server,
+    StatsAPI,
     StatsServer,
     UdpOverTcpEntry,
     UdpOverTcpExitServer,

@@ -195,24 +195,35 @@ server = Server(addons=[stats])
 
 用 `FlowStats` 搭建自己的 HTTP API、Prometheus exporter、文件审计流或控制面集成。
 
-### StatsServer — 兼容 HTTP Wrapper
+### StatsAPI — 显式 opt-in HTTP API
 
 ```python
-from asyncio_socks_server import Server, StatsServer
+from asyncio_socks_server import FlowStats, Server, StatsAPI
 
-stats = StatsServer(host="127.0.0.1", port=9900)
-server = Server(addons=[stats])
+stats = FlowStats()
+api = StatsAPI(stats=stats, host="127.0.0.1", port=9900)
+server = Server(addons=[stats, api])
 ```
 
-`StatsServer` 是基于 `FlowStats` 的简单标准库 HTTP wrapper：
+`StatsAPI` 是基于 `FlowStats` 的简单标准库 HTTP wrapper。只有显式加入
+addon 列表时才会启动 listener：
 
 | Endpoint | 内容 |
 |----------|------|
 | `GET /health` | 存活响应 |
 | `GET /stats` | `FlowStats.snapshot()` |
 | `GET /flows` | `FlowStats.flows()` |
+| `GET /errors` | `FlowStats.errors()` |
 
-建议把 `FlowStats` 或 `StatsServer` 放在 addon 列表靠前位置。它通过竞争型 hook 观察 flow start。更早胜出的 addon 会让它看不到 start 事件。`on_flow_close` 仍会收到最终 Flow 快照。
+如果不传入 `FlowStats`，`StatsAPI` 会自己创建并托管一个：
+
+```python
+server = Server(addons=[StatsAPI(host="127.0.0.1", port=9900)])
+```
+
+`StatsServer` 作为 `StatsAPI` 的向后兼容名称保留。
+
+建议把 `FlowStats` 或托管自身 stats 的 `StatsAPI` 放在 addon 列表靠前位置。它通过竞争型 hook 观察 flow start。更早胜出的 addon 会让它看不到 start 事件。`on_flow_close` 仍会收到最终 Flow 快照。
 
 ### FileAuth — 多用户认证
 

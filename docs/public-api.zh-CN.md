@@ -33,7 +33,8 @@ from asyncio_socks_server import Server, Addon, Address, connect
 | `UdpOverTcpEntry` | Addon | 将 UDP ASSOCIATE 流量封装到 TCP exit service |
 | `UdpOverTcpExitServer` | 服务端 | UDP-over-TCP 链式代理的出口服务 |
 | `FlowStats` | Addon | 内存 flow 统计 collector |
-| `StatsServer` | Addon | 基于 FlowStats 的兼容 HTTP wrapper |
+| `StatsAPI` | Addon | 基于 FlowStats 的显式 opt-in HTTP API |
+| `StatsServer` | Addon | `StatsAPI` 的向后兼容名称 |
 | `TrafficCounter` | Addon | 聚合已关闭 flow 的字节计数 |
 | `FileAuth` | Addon | 从 JSON 文件读取用户名/密码 |
 | `IPFilter` | Addon | 源 IP allow/block 规则 |
@@ -115,13 +116,24 @@ Addon 应把 `Flow` 视为可读上下文。修改字节计数或地址字段不
 用 `FlowStats` 自行搭建应用需要的 HTTP API、metrics exporter 或日志管道。
 建议把它放在 addon 列表靠前位置，这样它能在其他竞争型 addon 获胜前观察 flow start。
 
-`StatsServer` 作为小型兼容 wrapper 保留。它启动一个基于 `FlowStats` 的标准库 HTTP server：
+`StatsAPI` 是内置的显式 opt-in HTTP 展示 addon。它可以自己托管
+`FlowStats`，也可以暴露应用传入的 `FlowStats`：
+
+```python
+from asyncio_socks_server import FlowStats, Server, StatsAPI
+
+stats = FlowStats()
+server = Server(addons=[stats, StatsAPI(stats=stats, host="127.0.0.1", port=9900)])
+```
 
 | Endpoint | 含义 |
 |----------|------|
 | `GET /health` | 存活检查 |
 | `GET /stats` | `FlowStats.snapshot()` |
 | `GET /flows` | `FlowStats.flows()` |
+| `GET /errors` | `FlowStats.errors()` |
+
+`StatsServer` 作为 `StatsAPI` 的向后兼容名称保留。
 
 ## CLI 契约
 
