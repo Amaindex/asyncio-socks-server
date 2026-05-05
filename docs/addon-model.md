@@ -196,18 +196,39 @@ addon hooks and exposes Python methods for application-specific presentation:
 Use `FlowStats` as infrastructure for your own HTTP API, Prometheus exporter,
 file audit stream, or control-plane integration.
 
+### FlowAudit — Usage Audit Infrastructure
+
+```python
+from asyncio_socks_server import FlowAudit, Server
+
+audit = FlowAudit()
+server = Server(addons=[audit])
+```
+
+`FlowAudit` has no network side effects. It records closed flows in memory and
+aggregates usage by source host and target host:
+
+| Method | Content |
+|--------|---------|
+| `snapshot()` | Kafra-like audit summary with period, records, totals, devices, and traffic |
+| `reset()` | Clear the in-memory audit window |
+
+The audit window resets when the process restarts. Use an application-specific
+sink if you need durable long-term audit storage.
+
 ### StatsAPI — Opt-in HTTP API
 
 ```python
-from asyncio_socks_server import FlowStats, Server, StatsAPI
+from asyncio_socks_server import FlowAudit, FlowStats, Server, StatsAPI
 
+audit = FlowAudit()
 stats = FlowStats()
-api = StatsAPI(stats=stats, host="127.0.0.1", port=9900)
-server = Server(addons=[stats, api])
+api = StatsAPI(stats=stats, audit=audit, host="127.0.0.1", port=9900)
+server = Server(addons=[audit, stats, api])
 ```
 
-`StatsAPI` is a simple stdlib HTTP wrapper around `FlowStats`. It starts a
-listener only when explicitly added to the addon list:
+`StatsAPI` is a simple stdlib HTTP wrapper around `FlowStats` and optional
+`FlowAudit`. It starts a listener only when explicitly added to the addon list:
 
 | Endpoint | Content |
 |----------|---------|
@@ -215,6 +236,8 @@ listener only when explicitly added to the addon list:
 | `GET /stats` | `FlowStats.snapshot()` |
 | `GET /flows` | `FlowStats.flows()` |
 | `GET /errors` | `FlowStats.errors()` |
+| `GET /audit?top=25&device=` | `FlowAudit.snapshot()` |
+| `POST /audit/refresh?top=25&device=` | Current `FlowAudit.snapshot()` for Kafra-like refresh flows |
 
 When constructed without a `FlowStats` instance, `StatsAPI` creates and owns one:
 

@@ -18,7 +18,7 @@ pip install asyncio-socks-server
 Docker image 使用明确版本：
 
 ```shell
-docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.2.0
+docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.3.0
 ```
 
 ## 运行
@@ -49,13 +49,15 @@ Server(host="::", port=1080).run()
 使用 addon：
 
 ```python
-from asyncio_socks_server import ChainRouter, FlowStats, Server, StatsAPI
+from asyncio_socks_server import ChainRouter, FlowAudit, FlowStats, Server, StatsAPI
 
+audit = FlowAudit()
 stats = FlowStats()
 server = Server(
     addons=[
+        audit,
         stats,
-        StatsAPI(stats=stats, host="127.0.0.1", port=9900),
+        StatsAPI(stats=stats, audit=audit, host="127.0.0.1", port=9900),
         ChainRouter("10.0.0.5:1080"),
     ],
 )
@@ -68,6 +70,8 @@ Addon 顺序就是执行顺序。内置 addon 都是显式 opt-in；只有加入
 `FlowStats` 没有网络副作用。使用它的 `snapshot()` 和 `flows()` 方法，
 可以自行搭建 HTTP API、metrics exporter 或日志管道，也可以搭配
 `StatsAPI` 使用一个小型本地 HTTP API。
+`FlowAudit` 在内存中记录已关闭 flow 的用量，可通过 `StatsAPI`
+暴露类似 Kafra 的用量审计摘要。
 
 ## 模型
 
@@ -86,6 +90,7 @@ Hook 调度有三种模型：
 - `ChainRouter`：TCP 链式代理
 - `UdpOverTcpEntry` 和 `UdpOverTcpExitServer`：UDP 链式代理
 - `FlowStats`：内存 flow 统计
+- `FlowAudit`：已关闭 flow 的用量审计摘要
 - `StatsAPI`：基于 `FlowStats` 的显式 opt-in HTTP API
 - `StatsServer`：`StatsAPI` 的向后兼容名称
 - `TrafficCounter`、`FileAuth`、`IPFilter`、`Logger`
@@ -147,6 +152,7 @@ from asyncio_socks_server import (
     Address,
     ChainRouter,
     Flow,
+    FlowAudit,
     FlowStats,
     Server,
     StatsAPI,

@@ -18,7 +18,7 @@ pip install asyncio-socks-server
 Docker images are versioned:
 
 ```shell
-docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.2.0
+docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.3.0
 ```
 
 ## Run
@@ -49,13 +49,15 @@ Server(host="::", port=1080).run()
 With addons:
 
 ```python
-from asyncio_socks_server import ChainRouter, FlowStats, Server, StatsAPI
+from asyncio_socks_server import ChainRouter, FlowAudit, FlowStats, Server, StatsAPI
 
+audit = FlowAudit()
 stats = FlowStats()
 server = Server(
     addons=[
+        audit,
         stats,
-        StatsAPI(stats=stats, host="127.0.0.1", port=9900),
+        StatsAPI(stats=stats, audit=audit, host="127.0.0.1", port=9900),
         ChainRouter("10.0.0.5:1080"),
     ],
 )
@@ -67,6 +69,8 @@ is what starts an HTTP listener.
 
 `FlowStats` has no network side effects. Use its `snapshot()` and `flows()`
 methods directly, or pair it with `StatsAPI` for a small local HTTP API.
+`FlowAudit` records closed-flow usage in memory and can be exposed through
+`StatsAPI` for Kafra-like usage audit summaries.
 
 ## Model
 
@@ -85,6 +89,7 @@ Built-ins:
 - `ChainRouter` for TCP chain proxying
 - `UdpOverTcpEntry` and `UdpOverTcpExitServer` for UDP chain proxying
 - `FlowStats` for in-memory flow statistics
+- `FlowAudit` for closed-flow usage audit summaries
 - `StatsAPI` as an opt-in HTTP API around `FlowStats`
 - `StatsServer` as a backward-compatible name for `StatsAPI`
 - `TrafficCounter`, `FileAuth`, `IPFilter`, `Logger`
@@ -146,6 +151,7 @@ from asyncio_socks_server import (
     Address,
     ChainRouter,
     Flow,
+    FlowAudit,
     FlowStats,
     Server,
     StatsAPI,

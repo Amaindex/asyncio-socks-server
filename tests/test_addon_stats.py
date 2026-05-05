@@ -3,6 +3,7 @@ import json
 
 from asyncio_socks_server import (
     Address,
+    FlowAudit,
     FlowStats,
     Server,
     StatsAPI,
@@ -27,8 +28,12 @@ async def _stop_server(server, task):
 
 
 async def _get_json(port: int, path: str):
+    return await _request_json(port, "GET", path)
+
+
+async def _request_json(port: int, method: str, path: str):
     reader, writer = await asyncio.open_connection("127.0.0.1", port)
-    writer.write(f"GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n".encode("ascii"))
+    writer.write(f"{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n".encode("ascii"))
     await writer.drain()
     data = await reader.read()
     writer.close()
@@ -107,6 +112,73 @@ class TestStatsServer:
             assert payload["total"] == 1
             assert payload["by_type"] == {"RuntimeError": 1}
             assert payload["recent"][0]["message"] == "boom"
+        finally:
+            await _stop_server(server, task)
+
+    async def test_flow_audit_has_no_network_side_effects(self, echo_server):
+        audit = FlowAudit()
+        server, task = await _start_server(addons=[audit])
+        conn = None
+        try:
+            conn = await connect(Address(server.host, server.port), echo_server)
+            conn.writer.write(b"audit")
+            await conn.writer.drain()
+            data = await conn.reader.read(4096)
+            assert data == b"audit"
+            conn.writer.close()
+            await conn.writer.wait_closed()
+            await asyncio.sleep(0.05)
+
+            payload = audit.snapshot()
+            assert payload["status"] == "ready"
+            assert payload["records"] == 1
+            assert payload["total"] == {"upload": 5, "download": 5, "total": 10}
+            assert payload["devices"][0]["total"] == 10
+            assert payload["traffic"][0]["total"] == 10
+            assert payload["recent"][0]["started_at"].endswith("Z")
+        finally:
+            if conn is not None and not conn.writer.is_closing():
+                conn.writer.close()
+                await conn.writer.wait_closed()
+            await _stop_server(server, task)
+
+    async def test_stats_api_exposes_flow_audit(self, echo_server):
+        audit = FlowAudit()
+        api = StatsAPI(audit=audit)
+        server, task = await _start_server(addons=[audit, api])
+        conn = None
+        try:
+            conn = await connect(Address(server.host, server.port), echo_server)
+            conn.writer.write(b"audit-api")
+            await conn.writer.drain()
+            data = await conn.reader.read(4096)
+            assert data == b"audit-api"
+            conn.writer.close()
+            await conn.writer.wait_closed()
+            await asyncio.sleep(0.05)
+
+            status, payload = await _get_json(api.port, "/audit?top=1")
+            assert status == 200
+            assert payload["records"] == 1
+            assert len(payload["devices"]) == 1
+            assert len(payload["traffic"]) == 1
+
+            status, payload = await _request_json(api.port, "POST", "/audit/refresh")
+            assert status == 200
+            assert payload["records"] == 1
+        finally:
+            if conn is not None and not conn.writer.is_closing():
+                conn.writer.close()
+                await conn.writer.wait_closed()
+            await _stop_server(server, task)
+
+    async def test_stats_api_reports_audit_disabled(self):
+        stats = StatsAPI()
+        server, task = await _start_server(addons=[stats])
+        try:
+            status, payload = await _get_json(stats.port, "/audit")
+            assert status == 404
+            assert payload == {"error": "audit disabled"}
         finally:
             await _stop_server(server, task)
 

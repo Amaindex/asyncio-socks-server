@@ -34,6 +34,7 @@ Modules under `asyncio_socks_server.core`,
 | `ChainRouter` | Addon | Route TCP CONNECT through a downstream SOCKS5 proxy |
 | `UdpOverTcpEntry` | Addon | Tunnel UDP ASSOCIATE traffic through a TCP exit service |
 | `UdpOverTcpExitServer` | Server | Exit service for UDP-over-TCP chaining |
+| `FlowAudit` | Addon | In-memory closed-flow usage audit collector |
 | `FlowStats` | Addon | In-memory flow statistics collector |
 | `StatsAPI` | Addon | Opt-in HTTP API backed by FlowStats |
 | `StatsServer` | Addon | Backward-compatible name for StatsAPI |
@@ -121,15 +122,33 @@ Use `FlowStats` to build an application-specific HTTP API, metrics exporter, or
 logging pipeline. Put it early in the addon list so it can observe flow starts
 before another competitive addon wins.
 
+`FlowAudit` is the usage audit infrastructure. It has no network side effects
+and aggregates closed-flow usage by source host and target host:
+
+| Method | Meaning |
+|--------|---------|
+| `snapshot()` | Kafra-like audit summary with period, records, totals, devices, traffic, and recent records |
+| `reset()` | Clear the in-memory audit window |
+
+The audit window is in-memory and process-local. Use a custom addon or sink if
+you need durable long-term storage.
+
 `StatsAPI` is the built-in opt-in HTTP presentation addon. It can either own its
-own `FlowStats` instance, or expose a `FlowStats` instance supplied by the
-application:
+own `FlowStats` instance, or expose `FlowStats` and `FlowAudit` instances
+supplied by the application:
 
 ```python
-from asyncio_socks_server import FlowStats, Server, StatsAPI
+from asyncio_socks_server import FlowAudit, FlowStats, Server, StatsAPI
 
+audit = FlowAudit()
 stats = FlowStats()
-server = Server(addons=[stats, StatsAPI(stats=stats, host="127.0.0.1", port=9900)])
+server = Server(
+    addons=[
+        audit,
+        stats,
+        StatsAPI(stats=stats, audit=audit, host="127.0.0.1", port=9900),
+    ],
+)
 ```
 
 | Endpoint | Meaning |
@@ -138,6 +157,8 @@ server = Server(addons=[stats, StatsAPI(stats=stats, host="127.0.0.1", port=9900
 | `GET /stats` | `FlowStats.snapshot()` |
 | `GET /flows` | `FlowStats.flows()` |
 | `GET /errors` | `FlowStats.errors()` |
+| `GET /audit?top=25&device=` | `FlowAudit.snapshot()` |
+| `POST /audit/refresh?top=25&device=` | Current `FlowAudit.snapshot()` for Kafra-like refresh flows |
 
 `StatsServer` remains available as a backward-compatible name for `StatsAPI`.
 

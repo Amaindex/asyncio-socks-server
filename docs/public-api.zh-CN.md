@@ -32,6 +32,7 @@ from asyncio_socks_server import Server, Addon, Address, connect
 | `ChainRouter` | Addon | 将 TCP CONNECT 路由到下游 SOCKS5 proxy |
 | `UdpOverTcpEntry` | Addon | 将 UDP ASSOCIATE 流量封装到 TCP exit service |
 | `UdpOverTcpExitServer` | 服务端 | UDP-over-TCP 链式代理的出口服务 |
+| `FlowAudit` | Addon | 内存中的已关闭 flow 用量审计 collector |
 | `FlowStats` | Addon | 内存 flow 统计 collector |
 | `StatsAPI` | Addon | 基于 FlowStats 的显式 opt-in HTTP API |
 | `StatsServer` | Addon | `StatsAPI` 的向后兼容名称 |
@@ -116,14 +117,32 @@ Addon 应把 `Flow` 视为可读上下文。修改字节计数或地址字段不
 用 `FlowStats` 自行搭建应用需要的 HTTP API、metrics exporter 或日志管道。
 建议把它放在 addon 列表靠前位置，这样它能在其他竞争型 addon 获胜前观察 flow start。
 
+`FlowAudit` 是用量审计基础设施。它没有网络副作用，按 source host 和
+target host 聚合已关闭 flow 的用量：
+
+| 方法 | 含义 |
+|------|------|
+| `snapshot()` | 类似 Kafra audit 的摘要，包含 period、records、total、devices、traffic 和 recent records |
+| `reset()` | 清空当前内存审计窗口 |
+
+审计窗口是内存级、进程级的。如果需要长期留存，应使用自定义 addon 或 sink
+做持久化。
+
 `StatsAPI` 是内置的显式 opt-in HTTP 展示 addon。它可以自己托管
-`FlowStats`，也可以暴露应用传入的 `FlowStats`：
+`FlowStats`，也可以暴露应用传入的 `FlowStats` 和 `FlowAudit`：
 
 ```python
-from asyncio_socks_server import FlowStats, Server, StatsAPI
+from asyncio_socks_server import FlowAudit, FlowStats, Server, StatsAPI
 
+audit = FlowAudit()
 stats = FlowStats()
-server = Server(addons=[stats, StatsAPI(stats=stats, host="127.0.0.1", port=9900)])
+server = Server(
+    addons=[
+        audit,
+        stats,
+        StatsAPI(stats=stats, audit=audit, host="127.0.0.1", port=9900),
+    ],
+)
 ```
 
 | Endpoint | 含义 |
@@ -132,6 +151,8 @@ server = Server(addons=[stats, StatsAPI(stats=stats, host="127.0.0.1", port=9900
 | `GET /stats` | `FlowStats.snapshot()` |
 | `GET /flows` | `FlowStats.flows()` |
 | `GET /errors` | `FlowStats.errors()` |
+| `GET /audit?top=25&device=` | `FlowAudit.snapshot()` |
+| `POST /audit/refresh?top=25&device=` | 返回当前 `FlowAudit.snapshot()`，用于类似 Kafra 的刷新流程 |
 
 `StatsServer` 作为 `StatsAPI` 的向后兼容名称保留。
 

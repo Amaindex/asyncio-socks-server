@@ -7,6 +7,7 @@ from collections import deque
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 from asyncio_socks_server.addons.base import Addon
 from asyncio_socks_server.core.types import Flow
@@ -216,6 +217,141 @@ class FlowStats(Addon):
         return round(time.monotonic() - started_at, 6)
 
 
+class FlowAudit(Addon):
+    """Closed-flow traffic audit collector with no network side effects."""
+
+    def __init__(self, max_recent_records: int = 100) -> None:
+        self.max_recent_records = max_recent_records
+        self._recent: deque[dict[str, Any]] = deque(maxlen=max_recent_records)
+        self._devices: dict[str, dict[str, Any]] = {}
+        self._traffic: dict[str, dict[str, Any]] = {}
+        self._period_start: float | None = None
+        self._period_end: float | None = None
+        self.records = 0
+        self.skipped = 0
+        self.total_upload = 0
+        self.total_download = 0
+
+    async def on_flow_close(self, flow: Flow) -> None:
+        self._record(flow)
+
+    def snapshot(
+        self,
+        top: int = 25,
+        device: str | None = None,
+    ) -> dict[str, Any]:
+        """Return a Kafra-like traffic audit summary."""
+        top = max(1, min(top, 100))
+        devices = self._sorted_totals(self._devices.values(), top, device)
+        traffic = self._sorted_totals(self._traffic.values(), top)
+        generated_at = self._format_wall_time(time.time())
+        return {
+            "status": "ready" if self.records else "empty",
+            "generated_at": generated_at,
+            "period_start": self._format_optional_time(self._period_start),
+            "period_end": self._format_optional_time(self._period_end),
+            "duration_ms": 0,
+            "records": self.records,
+            "skipped": self.skipped,
+            "total": {
+                "upload": self.total_upload,
+                "download": self.total_download,
+                "total": self.total_upload + self.total_download,
+            },
+            "devices": devices,
+            "traffic": traffic,
+            "recent": list(self._recent),
+        }
+
+    def reset(self) -> None:
+        """Clear in-memory audit state."""
+        self._recent.clear()
+        self._devices.clear()
+        self._traffic.clear()
+        self._period_start = None
+        self._period_end = None
+        self.records = 0
+        self.skipped = 0
+        self.total_upload = 0
+        self.total_download = 0
+
+    def _record(self, flow: Flow) -> None:
+        upload = flow.bytes_up
+        download = flow.bytes_down
+        total = upload + download
+        started_at = flow.started_wall_at
+        ended_at = time.time()
+        self._period_start = (
+            started_at
+            if self._period_start is None
+            else min(self._period_start, started_at)
+        )
+        self._period_end = ended_at
+        self.records += 1
+        self.total_upload += upload
+        self.total_download += download
+
+        device = flow.src.host
+        destination = flow.dst.host
+        self._add_total(self._devices, device, "device", upload, download)
+        self._add_total(self._traffic, destination, "domain", upload, download)
+        self._recent.append(
+            {
+                "id": flow.id,
+                "src": asdict(flow.src),
+                "dst": asdict(flow.dst),
+                "protocol": flow.protocol,
+                "started_at": self._format_wall_time(started_at),
+                "ended_at": self._format_wall_time(ended_at),
+                "upload": upload,
+                "download": download,
+                "total": total,
+            }
+        )
+
+    @staticmethod
+    def _add_total(
+        totals: dict[str, dict[str, Any]],
+        key: str,
+        label: str,
+        upload: int,
+        download: int,
+    ) -> None:
+        item = totals.setdefault(
+            key,
+            {
+                label: key,
+                "upload": 0,
+                "download": 0,
+                "total": 0,
+            },
+        )
+        item["upload"] += upload
+        item["download"] += download
+        item["total"] += upload + download
+
+    @staticmethod
+    def _sorted_totals(
+        items: Any,
+        top: int,
+        device: str | None = None,
+    ) -> list[dict[str, Any]]:
+        out = [dict(item) for item in items]
+        if device:
+            out = [item for item in out if item.get("device") == device]
+        return sorted(out, key=lambda item: item["total"], reverse=True)[:top]
+
+    @classmethod
+    def _format_optional_time(cls, timestamp: float | None) -> str:
+        if timestamp is None:
+            return ""
+        return cls._format_wall_time(timestamp)
+
+    @staticmethod
+    def _format_wall_time(timestamp: float) -> str:
+        return datetime.fromtimestamp(timestamp, UTC).isoformat().replace("+00:00", "Z")
+
+
 class StatsAPI(Addon):
     """Opt-in HTTP API backed by FlowStats.
 
@@ -232,12 +368,14 @@ class StatsAPI(Addon):
         port: int = 0,
         max_closed_flows: int = 100,
         stats: FlowStats | None = None,
+        audit: FlowAudit | None = None,
     ) -> None:
         self.host = host
         self.port = port
         self.max_closed_flows = max_closed_flows
         self.stats = stats or FlowStats(max_closed_flows=max_closed_flows)
         self._owns_stats = stats is None
+        self.audit = audit
         self._server: asyncio.AbstractServer | None = None
 
     async def on_start(self) -> None:
@@ -283,13 +421,18 @@ class StatsAPI(Addon):
     ) -> None:
         try:
             line = await reader.readline()
-            method, path, _ = line.decode("ascii", errors="replace").split(" ", 2)
+            method, target, _ = line.decode("ascii", errors="replace").split(" ", 2)
+            parsed = urlsplit(target)
+            path = parsed.path
+            query = parse_qs(parsed.query)
             while True:
                 header = await reader.readline()
                 if header in (b"\r\n", b"\n", b""):
                     break
 
-            if method != "GET":
+            if method == "POST" and path == "/audit/refresh":
+                await self._write_audit(writer, query)
+            elif method != "GET":
                 await self._write_json(writer, 405, {"error": "method not allowed"})
             elif path == "/health":
                 await self._write_json(writer, 200, {"ok": True})
@@ -299,6 +442,8 @@ class StatsAPI(Addon):
                 await self._write_json(writer, 200, self.stats.flows())
             elif path == "/errors":
                 await self._write_json(writer, 200, self.stats.errors())
+            elif path == "/audit":
+                await self._write_audit(writer, query)
             else:
                 await self._write_json(writer, 404, {"error": "not found"})
         except (ConnectionError, OSError, ValueError):
@@ -331,6 +476,40 @@ class StatsAPI(Addon):
             + body
         )
         await writer.drain()
+
+    async def _write_audit(
+        self,
+        writer: asyncio.StreamWriter,
+        query: dict[str, list[str]],
+    ) -> None:
+        if self.audit is None:
+            await self._write_json(writer, 404, {"error": "audit disabled"})
+            return
+        await self._write_json(
+            writer,
+            200,
+            self.audit.snapshot(
+                top=self._int_query(query, "top", 25),
+                device=self._str_query(query, "device"),
+            ),
+        )
+
+    @staticmethod
+    def _int_query(query: dict[str, list[str]], name: str, default: int) -> int:
+        values = query.get(name)
+        if not values:
+            return default
+        try:
+            return int(values[0])
+        except ValueError:
+            return default
+
+    @staticmethod
+    def _str_query(query: dict[str, list[str]], name: str) -> str | None:
+        values = query.get(name)
+        if not values or not values[0]:
+            return None
+        return values[0]
 
 
 class StatsServer(StatsAPI):

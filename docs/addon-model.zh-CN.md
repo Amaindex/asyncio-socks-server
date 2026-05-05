@@ -195,18 +195,38 @@ server = Server(addons=[stats])
 
 用 `FlowStats` 搭建自己的 HTTP API、Prometheus exporter、文件审计流或控制面集成。
 
+### FlowAudit — 用量审计基础设施
+
+```python
+from asyncio_socks_server import FlowAudit, Server
+
+audit = FlowAudit()
+server = Server(addons=[audit])
+```
+
+`FlowAudit` 没有网络副作用。它在内存中记录已关闭 flow，并按 source host
+和 target host 聚合用量：
+
+| 方法 | 内容 |
+|------|------|
+| `snapshot()` | 类似 Kafra audit 的摘要，包含 period、records、total、devices 和 traffic |
+| `reset()` | 清空当前内存审计窗口 |
+
+进程重启后审计窗口会重置。如果需要长期留痕，应在应用层接入持久化 sink。
+
 ### StatsAPI — 显式 opt-in HTTP API
 
 ```python
-from asyncio_socks_server import FlowStats, Server, StatsAPI
+from asyncio_socks_server import FlowAudit, FlowStats, Server, StatsAPI
 
+audit = FlowAudit()
 stats = FlowStats()
-api = StatsAPI(stats=stats, host="127.0.0.1", port=9900)
-server = Server(addons=[stats, api])
+api = StatsAPI(stats=stats, audit=audit, host="127.0.0.1", port=9900)
+server = Server(addons=[audit, stats, api])
 ```
 
-`StatsAPI` 是基于 `FlowStats` 的简单标准库 HTTP wrapper。只有显式加入
-addon 列表时才会启动 listener：
+`StatsAPI` 是基于 `FlowStats` 和可选 `FlowAudit` 的简单标准库 HTTP
+wrapper。只有显式加入 addon 列表时才会启动 listener：
 
 | Endpoint | 内容 |
 |----------|------|
@@ -214,6 +234,8 @@ addon 列表时才会启动 listener：
 | `GET /stats` | `FlowStats.snapshot()` |
 | `GET /flows` | `FlowStats.flows()` |
 | `GET /errors` | `FlowStats.errors()` |
+| `GET /audit?top=25&device=` | `FlowAudit.snapshot()` |
+| `POST /audit/refresh?top=25&device=` | 返回当前 `FlowAudit.snapshot()`，用于类似 Kafra 的刷新流程 |
 
 如果不传入 `FlowStats`，`StatsAPI` 会自己创建并托管一个：
 
