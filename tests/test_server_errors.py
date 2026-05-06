@@ -2,6 +2,7 @@
 
 import asyncio
 
+from asyncio_socks_server import FlowStats
 from asyncio_socks_server.core.types import Address, Rep
 from asyncio_socks_server.server.server import Server
 from tests.conftest import _start_server, _stop_server
@@ -114,6 +115,34 @@ class TestRequestErrors:
 
             rep = await _read_reply(reader)
             assert rep == Rep.CONNECTION_REFUSED
+            writer.close()
+            await writer.wait_closed()
+        finally:
+            await _stop_server(server, task)
+
+    async def test_failed_connect_closes_observed_flow(self):
+        stats = FlowStats()
+        server, task = await _start_server(addons=[stats])
+        try:
+            reader, writer = await _raw_connect(Address(server.host, server.port))
+            writer.write(b"\x05\x01\x00")
+            await writer.drain()
+            resp = await reader.readexactly(2)
+            assert resp[1] == 0x00
+
+            writer.write(b"\x05\x01\x00\x01\x7f\x00\x00\x01\x00\x01")
+            await writer.drain()
+
+            rep = await _read_reply(reader)
+            assert rep == Rep.CONNECTION_REFUSED
+            await asyncio.sleep(0.05)
+
+            snapshot = stats.snapshot()
+            assert snapshot["active_flows"] == 0
+            assert snapshot["total_flows"] == 1
+            assert snapshot["total_closed_flows"] == 1
+            assert snapshot["closed_flows"] == 1
+
             writer.close()
             await writer.wait_closed()
         finally:

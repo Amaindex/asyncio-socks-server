@@ -41,6 +41,14 @@ The system SHALL create one `Flow` context for each TCP CONNECT or UDP ASSOCIATE
 - THEN the flow records source address, destination address, protocol `tcp`, start time, and byte counters
 - AND the same flow object is passed to connect, data, and close hooks for that connection
 
+#### Scenario: TCP setup failure after observation
+
+- GIVEN a valid TCP CONNECT request
+- AND the server has dispatched the connect hook with a flow
+- WHEN remote connection setup fails before relay starts
+- THEN the server sends an appropriate SOCKS5 failure reply
+- AND dispatches the flow close hook for the same flow
+
 #### Scenario: UDP flow lifecycle
 
 - GIVEN a valid UDP ASSOCIATE request

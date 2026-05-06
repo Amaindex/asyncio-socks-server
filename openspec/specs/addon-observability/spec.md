@@ -25,6 +25,13 @@ The system SHALL provide a `FlowStats` addon that collects in-memory runtime cou
 - AND retains a bounded recent closed-flow snapshot
 - AND updates closed-flow and byte totals
 
+#### Scenario: FlowStats clears failed TCP setup flows
+
+- GIVEN `FlowStats` observed a TCP CONNECT flow
+- WHEN remote connection setup fails and the core closes the flow
+- THEN `snapshot()` reports no active entry for that failed flow
+- AND closed-flow counters include the failed setup lifecycle
+
 #### Scenario: FlowStats records errors
 
 - GIVEN `FlowStats` receives error hook notifications

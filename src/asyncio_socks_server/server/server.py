@@ -194,43 +194,45 @@ class Server:
             started_at=time.monotonic(),
         )
         conn: Connection | None = None
+        connected = False
 
         try:
-            addon_result = await self._addon_manager.dispatch_connect(flow)
-        except Exception as e:
-            logger.error(f"{fmt_connection(src, dst)} | addon error: {e}")
-            client_writer.write(encode_reply(Rep.CONNECTION_NOT_ALLOWED))
-            await client_writer.drain()
-            return
-        if addon_result is not None and isinstance(addon_result, Connection):
-            conn = addon_result
-        else:
             try:
-                remote_reader, remote_writer = await asyncio.open_connection(
-                    dst.host, dst.port
-                )
-                sock = remote_writer.get_extra_info("socket")
-                sockname = sock.getsockname() if sock else ("::", 0)
-                conn = Connection(
-                    reader=remote_reader,
-                    writer=remote_writer,
-                    address=Address(sockname[0], sockname[1]),
-                )
-            except (ConnectionError, OSError) as e:
-                logger.error(f"{fmt_connection(src, dst)} | {e}")
-                rep = self._error_to_rep(e)
-                client_writer.write(encode_reply(rep))
+                addon_result = await self._addon_manager.dispatch_connect(flow)
+            except Exception as e:
+                logger.error(f"{fmt_connection(src, dst)} | addon error: {e}")
+                client_writer.write(encode_reply(Rep.CONNECTION_NOT_ALLOWED))
                 await client_writer.drain()
                 return
+            if addon_result is not None and isinstance(addon_result, Connection):
+                conn = addon_result
+            else:
+                try:
+                    remote_reader, remote_writer = await asyncio.open_connection(
+                        dst.host, dst.port
+                    )
+                    sock = remote_writer.get_extra_info("socket")
+                    sockname = sock.getsockname() if sock else ("::", 0)
+                    conn = Connection(
+                        reader=remote_reader,
+                        writer=remote_writer,
+                        address=Address(sockname[0], sockname[1]),
+                    )
+                except (ConnectionError, OSError) as e:
+                    logger.error(f"{fmt_connection(src, dst)} | {e}")
+                    rep = self._error_to_rep(e)
+                    client_writer.write(encode_reply(rep))
+                    await client_writer.drain()
+                    return
 
-        client_writer.write(
-            encode_reply(Rep.SUCCEEDED, conn.address.host, conn.address.port)
-        )
-        await client_writer.drain()
+            client_writer.write(
+                encode_reply(Rep.SUCCEEDED, conn.address.host, conn.address.port)
+            )
+            await client_writer.drain()
 
-        logger.info(f"{fmt_connection(src, dst)} | connected")
+            connected = True
+            logger.info(f"{fmt_connection(src, dst)} | connected")
 
-        try:
             await handle_tcp_relay(
                 client_reader,
                 client_writer,
@@ -240,12 +242,13 @@ class Server:
                 flow,
             )
         finally:
-            elapsed = time.monotonic() - flow.started_at
-            logger.info(
-                f"{fmt_connection(src, dst)} | "
-                f"closed {elapsed:.1f}s "
-                f"↑{fmt_bytes(flow.bytes_up)} ↓{fmt_bytes(flow.bytes_down)}"
-            )
+            if connected:
+                elapsed = time.monotonic() - flow.started_at
+                logger.info(
+                    f"{fmt_connection(src, dst)} | "
+                    f"closed {elapsed:.1f}s "
+                    f"↑{fmt_bytes(flow.bytes_up)} ↓{fmt_bytes(flow.bytes_down)}"
+                )
             await self._addon_manager.dispatch_flow_close(flow)
 
     async def _handle_udp_associate(
