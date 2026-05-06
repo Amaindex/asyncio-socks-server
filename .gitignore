@@ -18,6 +18,10 @@ venv/
 htmlcov/
 .coverage
 
+# Agent-local tooling
+.claude/
+.codex/
+
 # OpenSpec local workspace state
 .openspec-workspace/local.yaml
 
