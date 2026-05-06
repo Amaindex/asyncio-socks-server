@@ -18,7 +18,7 @@ pip install asyncio-socks-server
 Docker images are versioned:
 
 ```shell
-docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.3.0
+docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.3.1
 ```
 
 ## Run
@@ -201,7 +201,7 @@ uv build
 
 GitHub Actions tests Python 3.12 and 3.13, builds the Python package, and builds Docker images.
 
-Create a GitHub Release from a tag such as `v1.3.0`. The release workflow publishes the Python package. The Docker workflow publishes semver image tags.
+Create a GitHub Release from a tag such as `v1.3.1`. The release workflow publishes the Python package. The Docker workflow publishes semver image tags.
 
 ## License
 
