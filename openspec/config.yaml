@@ -1,0 +1,22 @@
+schema: spec-driven
+
+context: |
+  Project: asyncio-socks-server.
+  Runtime: Python 3.12+ with asyncio and zero runtime third-party dependencies.
+  Scope: a SOCKS5 toolchain/framework with programmable async addons.
+  Core contract: protocol parsing, relay, lifecycle, Flow context, and addon dispatch stay in the server core; policy, routing, observability, audit, and presentation are composed through addons.
+  Public API: 1.x compatibility is defined by package-root exports and docs/public-api.md.
+  Documentation: README and docs are stable project documentation; OpenSpec captures behavior contracts and change planning; deployment details belong outside this repo unless they are generic project behavior.
+
+rules:
+  proposal:
+    - State whether the change affects the 1.x public API or addon hook compatibility.
+    - Separate project-generic behavior from AX deployment-specific needs.
+  specs:
+    - Write behavior contracts, not implementation notes or historical development logs.
+    - Use observable scenarios that can be validated by tests or documented API behavior.
+  design:
+    - Preserve the split between core server behavior and opt-in addon behavior.
+    - Call out any new runtime dependency, persistent state, listener, or public endpoint explicitly.
+  tasks:
+    - Include tests and documentation updates when behavior or public API changes.

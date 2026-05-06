@@ -18,8 +18,8 @@ venv/
 htmlcov/
 .coverage
 
-# Development specs
-ax-spec/
+# OpenSpec local workspace state
+.openspec-workspace/local.yaml
 
 # Type checkers
 .mypy_cache/
