@@ -18,6 +18,10 @@ venv/
 htmlcov/
 .coverage
 
+# Agent-local tooling
+.claude/
+.codex/
+
 # Development specs
 ax-spec/
 
