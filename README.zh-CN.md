@@ -18,7 +18,7 @@ pip install asyncio-socks-server
 Docker image 使用明确版本：
 
 ```shell
-docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.3.0
+docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.3.1
 ```
 
 ## 运行
@@ -202,7 +202,7 @@ uv build
 
 GitHub Actions 测试 Python 3.12 和 3.13，构建 Python package，并构建 Docker images。
 
-从 `v1.3.0` 这样的 tag 创建 GitHub Release。Release workflow 发布 Python package。Docker workflow 发布 semver image tags。
+从 `v1.3.1` 这样的 tag 创建 GitHub Release。Release workflow 发布 Python package。Docker workflow 发布 semver image tags。
 
 ## License
 
