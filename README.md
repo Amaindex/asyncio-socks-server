@@ -18,7 +18,7 @@ pip install asyncio-socks-server
 Docker images are versioned:
 
 ```shell
-docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.3.1
+docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.3.2
 ```
 
 ## Run
@@ -37,6 +37,7 @@ CLI flags:
 | `--port` | `1080` | Bind port |
 | `--auth` | None | `username:password` |
 | `--log-level` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `--log-format` | `text` | `text` or `json` |
 
 ## Use from Python
 
@@ -80,6 +81,10 @@ is what starts an HTTP listener.
 methods directly, or pair it with `StatsAPI` for a small local HTTP API.
 `FlowAudit` records closed-flow usage in memory and can be exposed through
 `StatsAPI` for Kafra-like usage audit summaries.
+
+Default logs are compact key-value events, for example
+`event=flow_closed flow_id=7 proto=tcp src=127.0.0.1:50000 dst=example.com:443 bytes_up=128 bytes_down=1024`.
+Use `--log-format json` when a log collector prefers JSON lines.
 
 For task-oriented examples, see [Addon recipes](docs/addon-recipes.md).
 
@@ -201,7 +206,7 @@ uv build
 
 GitHub Actions tests Python 3.12 and 3.13, builds the Python package, and builds Docker images.
 
-Create a GitHub Release from a tag such as `v1.3.1`. The release workflow publishes the Python package. The Docker workflow publishes semver image tags.
+Create a GitHub Release from a tag such as `v1.3.2`. The release workflow publishes the Python package. The Docker workflow publishes semver image tags.
 
 ## License
 

@@ -1,11 +1,13 @@
 """Tests for core logging module."""
 
+import json
 import logging
 
 from asyncio_socks_server.core.logging import (
     fmt_addr,
     fmt_bytes,
     fmt_connection,
+    fmt_event,
     get_logger,
     setup_logging,
 )
@@ -14,14 +16,32 @@ from asyncio_socks_server.core.types import Address
 
 class TestSetupLogging:
     def test_sets_level_debug(self):
-        setup_logging("DEBUG")
+        setup_logging("DEBUG", force=True)
         logger = get_logger()
         assert logger.parent.level == logging.DEBUG
 
     def test_sets_level_info(self):
-        setup_logging("INFO")
+        setup_logging("INFO", force=True)
         logger = get_logger()
         assert logger.parent.level == logging.INFO
+
+    def test_sets_json_formatter(self):
+        setup_logging("INFO", log_format="json", force=True)
+        logger = get_logger()
+        handler = logger.parent.handlers[0]
+        record = logger.makeRecord(
+            logger.name,
+            logging.INFO,
+            __file__,
+            1,
+            "hello",
+            (),
+            None,
+        )
+        payload = json.loads(handler.format(record))
+        assert payload["level"] == "INFO"
+        assert payload["logger"] == "asyncio_socks_server"
+        assert payload["message"] == "hello"
 
 
 class TestGetLogger:
@@ -73,3 +93,24 @@ class TestFmtBytes:
 
     def test_megabytes(self):
         assert fmt_bytes(5 * 1024 * 1024) == "5.0MB"
+
+
+class TestFmtEvent:
+    def test_formats_machine_readable_event(self):
+        assert (
+            fmt_event(
+                "flow_closed",
+                flow_id=7,
+                proto="tcp",
+                src=Address("127.0.0.1", 1234),
+                dst=Address("example.com", 443),
+                bytes_up=10,
+            )
+            == "event=flow_closed flow_id=7 proto=tcp "
+            "src=127.0.0.1:1234 dst=example.com:443 bytes_up=10"
+        )
+
+    def test_quotes_values_with_spaces(self):
+        assert fmt_event("client_error", error="bad request") == (
+            'event=client_error error="bad request"'
+        )

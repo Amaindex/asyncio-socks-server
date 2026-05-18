@@ -25,7 +25,11 @@ class TestCliArgs:
         ):
             main()
         mock_server_cls.assert_called_once_with(
-            host="127.0.0.1", port=9050, auth=None, log_level="INFO"
+            host="127.0.0.1",
+            port=9050,
+            auth=None,
+            log_level="INFO",
+            log_format="text",
         )
         mock_instance.run.assert_called_once()
 
@@ -36,7 +40,11 @@ class TestCliArgs:
         with patch("sys.argv", ["asyncio_socks_server", "--auth", "user:pass"]):
             main()
         mock_server_cls.assert_called_once_with(
-            host="::", port=1080, auth=("user", "pass"), log_level="INFO"
+            host="::",
+            port=1080,
+            auth=("user", "pass"),
+            log_level="INFO",
+            log_format="text",
         )
 
     @patch("asyncio_socks_server.cli.Server")
@@ -46,7 +54,11 @@ class TestCliArgs:
         with patch("sys.argv", ["asyncio_socks_server", "--auth", "user:pass:word"]):
             main()
         mock_server_cls.assert_called_once_with(
-            host="::", port=1080, auth=("user", "pass:word"), log_level="INFO"
+            host="::",
+            port=1080,
+            auth=("user", "pass:word"),
+            log_level="INFO",
+            log_format="text",
         )
 
     def test_invalid_log_level(self):
@@ -61,7 +73,25 @@ class TestCliArgs:
         with patch("sys.argv", ["asyncio_socks_server", "--log-level", "DEBUG"]):
             main()
         mock_server_cls.assert_called_once_with(
-            host="::", port=1080, auth=None, log_level="DEBUG"
+            host="::",
+            port=1080,
+            auth=None,
+            log_level="DEBUG",
+            log_format="text",
+        )
+
+    @patch("asyncio_socks_server.cli.Server")
+    def test_json_log_format(self, mock_server_cls):
+        mock_instance = MagicMock()
+        mock_server_cls.return_value = mock_instance
+        with patch("sys.argv", ["asyncio_socks_server", "--log-format", "json"]):
+            main()
+        mock_server_cls.assert_called_once_with(
+            host="::",
+            port=1080,
+            auth=None,
+            log_level="INFO",
+            log_format="json",
         )
 
     @patch("asyncio_socks_server.cli.Server")

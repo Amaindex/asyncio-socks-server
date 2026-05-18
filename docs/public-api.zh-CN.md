@@ -55,6 +55,7 @@ server = Server(
     addons=[],
     auth=None,
     log_level="INFO",
+    log_format="text",
     shutdown_timeout=30.0,
 )
 server.run()
@@ -159,7 +160,7 @@ server = Server(
 ## CLI 契约
 
 ```shell
-asyncio_socks_server --host :: --port 1080 --auth user:pass --log-level INFO
+asyncio_socks_server --host :: --port 1080 --auth user:pass --log-level INFO --log-format text
 ```
 
 CLI 模式启动一个直连 SOCKS5 server，可选单用户认证。Addon 和高级路由通过 Python 配置。

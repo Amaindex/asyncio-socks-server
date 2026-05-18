@@ -4,6 +4,7 @@ import asyncio
 import time
 from typing import Callable
 
+from asyncio_socks_server.core.logging import fmt_event, get_logger
 from asyncio_socks_server.core.protocol import build_udp_header, parse_udp_header
 from asyncio_socks_server.core.socket import create_dualstack_udp_socket
 from asyncio_socks_server.core.types import Address, Flow
@@ -100,10 +101,29 @@ class UdpRelay(UdpRelayBase):
     def handle_client_datagram(self, data: bytes, client_addr: tuple[str, int]) -> None:
         try:
             dst, _, payload = parse_udp_header(data)
-        except Exception:
+        except Exception as e:
+            get_logger().debug(
+                fmt_event(
+                    "udp_datagram_dropped",
+                    flow_id=self._flow.id,
+                    reason="malformed_header",
+                    client=f"{client_addr[0]}:{client_addr[1]}",
+                    error_type=type(e).__name__,
+                    error=str(e),
+                )
+            )
             return
 
         if not payload:
+            get_logger().debug(
+                fmt_event(
+                    "udp_datagram_dropped",
+                    flow_id=self._flow.id,
+                    reason="empty_payload",
+                    client=f"{client_addr[0]}:{client_addr[1]}",
+                    dst=dst,
+                )
+            )
             return
 
         remote_key = (dst.host, dst.port)
@@ -119,6 +139,14 @@ class UdpRelay(UdpRelayBase):
         remote_key = (_normalize_host(remote_addr[0]), remote_addr[1])
         client_addr = self._route_map.get(remote_key)
         if client_addr is None:
+            get_logger().debug(
+                fmt_event(
+                    "udp_datagram_dropped",
+                    flow_id=self._flow.id,
+                    reason="missing_client_route",
+                    remote=f"{remote_addr[0]}:{remote_addr[1]}",
+                )
+            )
             return
 
         self._route_timestamps[remote_key] = time.monotonic()
@@ -157,4 +185,10 @@ class _UdpProtocol(asyncio.DatagramProtocol):
         self._on_data(data, addr)
 
     def error_received(self, exc: Exception) -> None:
-        pass
+        get_logger().debug(
+            fmt_event(
+                "udp_transport_error",
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+        )

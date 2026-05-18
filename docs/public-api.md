@@ -57,6 +57,7 @@ server = Server(
     addons=[],
     auth=None,
     log_level="INFO",
+    log_format="text",
     shutdown_timeout=30.0,
 )
 server.run()
@@ -165,7 +166,7 @@ server = Server(
 ## CLI Contract
 
 ```shell
-asyncio_socks_server --host :: --port 1080 --auth user:pass --log-level INFO
+asyncio_socks_server --host :: --port 1080 --auth user:pass --log-level INFO --log-format text
 ```
 
 CLI mode starts a direct SOCKS5 server with optional single-user auth. Addons and advanced routing are configured from Python.

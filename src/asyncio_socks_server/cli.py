@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 
+from asyncio_socks_server.core.logging import setup_logging
 from asyncio_socks_server.server.server import Server
 
 
@@ -23,6 +24,12 @@ def main() -> None:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="logging level",
     )
+    parser.add_argument(
+        "--log-format",
+        default="text",
+        choices=["text", "json"],
+        help="logging format",
+    )
     args = parser.parse_args()
 
     auth = None
@@ -30,10 +37,12 @@ def main() -> None:
         user, _, passwd = args.auth.partition(":")
         auth = (user, passwd)
 
+    setup_logging(args.log_level, log_format=args.log_format, force=True)
     server = Server(
         host=args.host,
         port=args.port,
         auth=auth,
         log_level=args.log_level,
+        log_format=args.log_format,
     )
     server.run()

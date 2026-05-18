@@ -9,7 +9,7 @@ import time
 from asyncio_socks_server.addons.base import Addon
 from asyncio_socks_server.addons.manager import AddonManager
 from asyncio_socks_server.core.address import encode_reply
-from asyncio_socks_server.core.logging import fmt_bytes, fmt_connection, get_logger
+from asyncio_socks_server.core.logging import fmt_bytes, fmt_event, get_logger
 from asyncio_socks_server.core.protocol import (
     build_auth_reply,
     build_method_reply,
@@ -35,12 +35,14 @@ class Server:
         addons: list[Addon] | None = None,
         auth: tuple[str, str] | None = None,
         log_level: str = "INFO",
+        log_format: str = "text",
         shutdown_timeout: float | None = 30.0,
     ):
         self.host = host
         self.port = port
         self.auth = auth
         self.log_level = log_level
+        self.log_format = log_format
         self.shutdown_timeout = shutdown_timeout
         self._addon_manager = AddonManager(addons)
         self._shutdown_event = asyncio.Event()
@@ -64,7 +66,7 @@ class Server:
     async def _run(self) -> None:
         from asyncio_socks_server.core.logging import setup_logging
 
-        setup_logging(self.log_level)
+        setup_logging(self.log_level, log_format=self.log_format)
         logger = get_logger()
 
         await self._addon_manager.dispatch_start()
@@ -78,7 +80,7 @@ class Server:
         )
         addr = srv.sockets[0].getsockname()
         self.port = addr[1]
-        logger.info(f"server started on {self.host}:{self.port}")
+        logger.info(fmt_event("server_started", host=self.host, port=self.port))
 
         try:
             await self._shutdown_event.wait()
@@ -87,7 +89,7 @@ class Server:
             await srv.wait_closed()
             await self._wait_for_client_tasks()
             await self._addon_manager.dispatch_stop()
-            logger.info("server stopped")
+            logger.info(fmt_event("server_stopped"))
 
     async def _wait_for_client_tasks(self) -> None:
         if not self._client_tasks:
@@ -117,6 +119,22 @@ class Server:
         try:
             await self._do_handshake_and_relay(reader, writer)
         except Exception as e:
+            logger = get_logger()
+            peername = writer.get_extra_info("peername")
+            src = Address(peername[0], peername[1]) if peername else None
+            level = (
+                logger.debug
+                if isinstance(e, asyncio.IncompleteReadError)
+                else logger.warning
+            )
+            level(
+                fmt_event(
+                    "client_error",
+                    src=src,
+                    error_type=type(e).__name__,
+                    error=str(e),
+                )
+            )
             await self._addon_manager.dispatch_error(e)
         finally:
             try:
@@ -200,7 +218,17 @@ class Server:
             try:
                 addon_result = await self._addon_manager.dispatch_connect(flow)
             except Exception as e:
-                logger.error(f"{fmt_connection(src, dst)} | addon error: {e}")
+                logger.error(
+                    fmt_event(
+                        "addon_error",
+                        flow_id=flow.id,
+                        proto=flow.protocol,
+                        src=src,
+                        dst=dst,
+                        error_type=type(e).__name__,
+                        error=str(e),
+                    )
+                )
                 client_writer.write(encode_reply(Rep.CONNECTION_NOT_ALLOWED))
                 await client_writer.drain()
                 return
@@ -219,7 +247,17 @@ class Server:
                         address=Address(sockname[0], sockname[1]),
                     )
                 except (ConnectionError, OSError) as e:
-                    logger.error(f"{fmt_connection(src, dst)} | {e}")
+                    logger.error(
+                        fmt_event(
+                            "flow_connect_failed",
+                            flow_id=flow.id,
+                            proto=flow.protocol,
+                            src=src,
+                            dst=dst,
+                            error_type=type(e).__name__,
+                            error=str(e),
+                        )
+                    )
                     rep = self._error_to_rep(e)
                     client_writer.write(encode_reply(rep))
                     await client_writer.drain()
@@ -231,7 +269,15 @@ class Server:
             await client_writer.drain()
 
             connected = True
-            logger.info(f"{fmt_connection(src, dst)} | connected")
+            logger.info(
+                fmt_event(
+                    "flow_connected",
+                    flow_id=flow.id,
+                    proto=flow.protocol,
+                    src=src,
+                    dst=dst,
+                )
+            )
 
             await handle_tcp_relay(
                 client_reader,
@@ -245,9 +291,18 @@ class Server:
             if connected:
                 elapsed = time.monotonic() - flow.started_at
                 logger.info(
-                    f"{fmt_connection(src, dst)} | "
-                    f"closed {elapsed:.1f}s "
-                    f"↑{fmt_bytes(flow.bytes_up)} ↓{fmt_bytes(flow.bytes_down)}"
+                    fmt_event(
+                        "flow_closed",
+                        flow_id=flow.id,
+                        proto=flow.protocol,
+                        src=src,
+                        dst=dst,
+                        duration_seconds=elapsed,
+                        bytes_up=flow.bytes_up,
+                        bytes_down=flow.bytes_down,
+                        human_up=fmt_bytes(flow.bytes_up),
+                        human_down=fmt_bytes(flow.bytes_down),
+                    )
                 )
             await self._addon_manager.dispatch_flow_close(flow)
 
@@ -272,7 +327,17 @@ class Server:
                 await self._addon_manager.dispatch_udp_associate(flow)
             ) or UdpRelay(client_addr=src, flow=flow)
         except Exception as e:
-            logger.error(f"{fmt_connection(src, dst)} | addon error: {e}")
+            logger.error(
+                fmt_event(
+                    "addon_error",
+                    flow_id=flow.id,
+                    proto=flow.protocol,
+                    src=src,
+                    dst=dst,
+                    error_type=type(e).__name__,
+                    error=str(e),
+                )
+            )
             writer.write(encode_reply(Rep.CONNECTION_NOT_ALLOWED))
             await writer.drain()
             return
@@ -303,11 +368,30 @@ class Server:
             await writer.drain()
             reply_sent = True
 
-            logger.info(f"{fmt_connection(src, dst)} | udp associate started")
+            logger.info(
+                fmt_event(
+                    "udp_associate_started",
+                    flow_id=flow.id,
+                    proto=flow.protocol,
+                    src=src,
+                    dst=dst,
+                    bind=client_bind,
+                )
+            )
 
             await reader.read()
         except Exception as e:
-            logger.error(f"{fmt_connection(src, dst)} | udp associate error: {e}")
+            logger.error(
+                fmt_event(
+                    "udp_associate_error",
+                    flow_id=flow.id,
+                    proto=flow.protocol,
+                    src=src,
+                    dst=dst,
+                    error_type=type(e).__name__,
+                    error=str(e),
+                )
+            )
             await self._addon_manager.dispatch_error(e)
             if not reply_sent:
                 try:
@@ -320,8 +404,17 @@ class Server:
             if client_transport and not client_transport.is_closing():
                 client_transport.close()
             logger.info(
-                f"{fmt_connection(src, dst)} | "
-                f"udp closed ↑{fmt_bytes(flow.bytes_up)} ↓{fmt_bytes(flow.bytes_down)}"
+                fmt_event(
+                    "udp_flow_closed",
+                    flow_id=flow.id,
+                    proto=flow.protocol,
+                    src=src,
+                    dst=dst,
+                    bytes_up=flow.bytes_up,
+                    bytes_down=flow.bytes_down,
+                    human_up=fmt_bytes(flow.bytes_up),
+                    human_down=fmt_bytes(flow.bytes_down),
+                )
             )
             await self._addon_manager.dispatch_flow_close(flow)
 
@@ -358,4 +451,10 @@ class _ClientUdpProtocol(asyncio.DatagramProtocol):
         self._relay.handle_client_datagram(data, addr)
 
     def error_received(self, exc: Exception) -> None:
-        pass
+        get_logger().debug(
+            fmt_event(
+                "udp_client_transport_error",
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+        )

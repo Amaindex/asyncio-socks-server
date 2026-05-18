@@ -18,7 +18,7 @@ pip install asyncio-socks-server
 Docker image 使用明确版本：
 
 ```shell
-docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.3.1
+docker run --rm -p 1080:1080 amaindex/asyncio-socks-server:1.3.2
 ```
 
 ## 运行
@@ -37,6 +37,7 @@ CLI 参数：
 | `--port` | `1080` | 监听端口 |
 | `--auth` | 无 | `username:password` |
 | `--log-level` | `INFO` | `DEBUG`、`INFO`、`WARNING`、`ERROR` |
+| `--log-format` | `text` | `text` 或 `json` |
 
 ## Python API
 
@@ -81,6 +82,10 @@ Addon 顺序就是执行顺序。内置 addon 都是显式 opt-in；只有加入
 `StatsAPI` 使用一个小型本地 HTTP API。
 `FlowAudit` 在内存中记录已关闭 flow 的用量，可通过 `StatsAPI`
 暴露类似 Kafra 的用量审计摘要。
+
+默认日志是紧凑的 key-value 事件，例如
+`event=flow_closed flow_id=7 proto=tcp src=127.0.0.1:50000 dst=example.com:443 bytes_up=128 bytes_down=1024`。
+当日志采集器更适合处理 JSON Lines 时，可使用 `--log-format json`。
 
 按目标组合 addon 的例子见 [Addon recipes](docs/addon-recipes.zh-CN.md)。
 
@@ -202,7 +207,7 @@ uv build
 
 GitHub Actions 测试 Python 3.12 和 3.13，构建 Python package，并构建 Docker images。
 
-从 `v1.3.1` 这样的 tag 创建 GitHub Release。Release workflow 发布 Python package。Docker workflow 发布 semver image tags。
+从 `v1.3.2` 这样的 tag 创建 GitHub Release。Release workflow 发布 Python package。Docker workflow 发布 semver image tags。
 
 ## License
 
