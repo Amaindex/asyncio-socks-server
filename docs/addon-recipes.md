@@ -118,7 +118,7 @@ Each node only knows its next hop:
 ```python
 Server(addons=[ChainRouter("B:1080")])  # A
 Server(addons=[ChainRouter("C:1080")])  # B
-Server()                                # C
+Server()  # C
 ```
 
 ## UDP Over TCP Chain

@@ -26,15 +26,14 @@ class TestDetectAtyp:
 class TestEncodeDecodeAddress:
     def _roundtrip(self, host: str, port: int):
         encoded = encode_address(host, port)
-        reader = asyncio.StreamReader()
 
         async def do():
+            reader = asyncio.StreamReader()
             reader.feed_data(encoded)
             reader.feed_eof()
             return await decode_address(reader)
 
-        result = asyncio.get_event_loop().run_until_complete(do())
-        return result
+        return asyncio.run(do())
 
     def test_ipv4_roundtrip(self):
         result = self._roundtrip("127.0.0.1", 1080)

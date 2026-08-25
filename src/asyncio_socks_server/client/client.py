@@ -48,10 +48,13 @@ async def _happy_eyeballs_connect(
     try:
         results = await loop.getaddrinfo(addr.host, addr.port, type=socket.SOCK_STREAM)
         for family, _, _, _, sockaddr in results:
+            host = sockaddr[0]
+            if not isinstance(host, str):
+                continue
             if family == socket.AF_INET6:
-                ipv6_hosts.append(sockaddr[0])
+                ipv6_hosts.append(host)
             elif family == socket.AF_INET:
-                ipv4_hosts.append(sockaddr[0])
+                ipv4_hosts.append(host)
     except socket.gaierror:
         ipv4_hosts = [addr.host]
 

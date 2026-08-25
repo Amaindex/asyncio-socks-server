@@ -115,7 +115,7 @@ Server(addons=[ChainRouter("10.0.0.5:1080")]).run()
 ```python
 Server(addons=[ChainRouter("B:1080")])  # A
 Server(addons=[ChainRouter("C:1080")])  # B
-Server()                                # C
+Server()  # C
 ```
 
 ## UDP Over TCP 链式代理

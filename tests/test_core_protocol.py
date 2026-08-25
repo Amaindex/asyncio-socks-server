@@ -46,28 +46,28 @@ class TestUsernamePassword:
     def test_parse(self):
         # VER=1, ULEN=4, UNAME="user", PLEN=4, PASSWD="pass"
         data = b"\x01\x04user\x04pass"
-        reader = asyncio.StreamReader()
 
         async def do():
+            reader = asyncio.StreamReader()
             reader.feed_data(data)
             reader.feed_eof()
             return await parse_username_password(reader)
 
-        username, password = asyncio.get_event_loop().run_until_complete(do())
+        username, password = asyncio.run(do())
         assert username == "user"
         assert password == "pass"
 
     def test_wrong_version(self):
         data = b"\x02\x04user\x04pass"
-        reader = asyncio.StreamReader()
 
         async def do():
+            reader = asyncio.StreamReader()
             reader.feed_data(data)
             reader.feed_eof()
             return await parse_username_password(reader)
 
         with pytest.raises(ProtocolError, match="unsupported auth version"):
-            asyncio.get_event_loop().run_until_complete(do())
+            asyncio.run(do())
 
     def test_build_auth_reply(self):
         assert build_auth_reply(True) == b"\x01\x00"
@@ -85,81 +85,81 @@ class TestParseRequest:
 
     def test_connect_ipv4(self):
         data = self._make_request(0x01, "127.0.0.1", 1080)
-        reader = asyncio.StreamReader()
 
         async def do():
+            reader = asyncio.StreamReader()
             reader.feed_data(data)
             reader.feed_eof()
             return await parse_request(reader)
 
-        cmd, addr = asyncio.get_event_loop().run_until_complete(do())
+        cmd, addr = asyncio.run(do())
         assert cmd == Cmd.CONNECT
         assert addr.host == "127.0.0.1"
         assert addr.port == 1080
 
     def test_connect_ipv6(self):
         data = self._make_request(0x01, "::1", 443)
-        reader = asyncio.StreamReader()
 
         async def do():
+            reader = asyncio.StreamReader()
             reader.feed_data(data)
             reader.feed_eof()
             return await parse_request(reader)
 
-        cmd, addr = asyncio.get_event_loop().run_until_complete(do())
+        cmd, addr = asyncio.run(do())
         assert cmd == Cmd.CONNECT
         assert addr.host == "::1"
         assert addr.port == 443
 
     def test_connect_domain(self):
         data = self._make_request(0x01, "example.com", 80)
-        reader = asyncio.StreamReader()
 
         async def do():
+            reader = asyncio.StreamReader()
             reader.feed_data(data)
             reader.feed_eof()
             return await parse_request(reader)
 
-        cmd, addr = asyncio.get_event_loop().run_until_complete(do())
+        cmd, addr = asyncio.run(do())
         assert cmd == Cmd.CONNECT
         assert addr.host == "example.com"
         assert addr.port == 80
 
     def test_udp_associate(self):
         data = self._make_request(0x03, "0.0.0.0", 0)
-        reader = asyncio.StreamReader()
 
         async def do():
+            reader = asyncio.StreamReader()
             reader.feed_data(data)
             reader.feed_eof()
             return await parse_request(reader)
 
-        cmd, addr = asyncio.get_event_loop().run_until_complete(do())
+        cmd, addr = asyncio.run(do())
         assert cmd == Cmd.UDP_ASSOCIATE
 
     def test_wrong_version(self):
         data = b"\x04\x01\x00\x01\x7f\x00\x00\x01\x04\x38"
-        reader = asyncio.StreamReader()
 
         async def do():
+            reader = asyncio.StreamReader()
             reader.feed_data(data)
             reader.feed_eof()
             return await parse_request(reader)
 
         with pytest.raises(ProtocolError, match="unsupported SOCKS version"):
-            asyncio.get_event_loop().run_until_complete(do())
+            asyncio.run(do())
 
     def test_unsupported_command(self):
         data = self._make_request(0x02, "127.0.0.1", 1080)  # BIND
-        reader = asyncio.StreamReader()
 
         async def do():
+            reader = asyncio.StreamReader()
             reader.feed_data(data)
             reader.feed_eof()
             return await parse_request(reader)
 
         with pytest.raises(ProtocolError, match="unsupported command"):
-            asyncio.get_event_loop().run_until_complete(do())
+            asyncio.run(do())
 
 
 class TestUdpHeader:

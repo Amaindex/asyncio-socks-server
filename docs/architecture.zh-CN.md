@@ -118,13 +118,13 @@ Target ──▶ raw UDP ──▶ Exit server ──▶ middle nodes ──▶ 
 ```python
 @dataclass
 class Flow:
-    id: int               # 全局递增 ID
-    src: Address          # 客户端地址
-    dst: Address          # 目标地址
+    id: int  # 全局递增 ID
+    src: Address  # 客户端地址
+    dst: Address  # 目标地址
     protocol: Literal["tcp", "udp"]
-    started_at: float     # time.monotonic()
-    bytes_up: int = 0     # 客户端→目标（TCP: post-addon; UDP: 原始载荷）
-    bytes_down: int = 0   # 目标→客户端
+    started_at: float  # time.monotonic()
+    bytes_up: int = 0  # 客户端→目标（TCP: post-addon; UDP: 原始载荷）
+    bytes_down: int = 0  # 目标→客户端
 ```
 
 没有 `Flow` 时，data hook 没有连接身份。字节计数也容易在 relay 和 addon 中重复。

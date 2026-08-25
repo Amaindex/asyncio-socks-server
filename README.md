@@ -134,7 +134,7 @@ Each node only knows its next hop:
 # A ─▶ B ─▶ C ─▶ target
 Server(addons=[ChainRouter("B:1080")])  # A
 Server(addons=[ChainRouter("C:1080")])  # B
-Server()                                # C
+Server()  # C
 ```
 
 UDP chain proxying uses TCP between proxy nodes:

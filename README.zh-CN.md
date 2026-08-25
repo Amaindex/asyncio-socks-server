@@ -134,7 +134,7 @@ Client ──▶ A ──▶ B ──▶ C ──▶ Target
 # A ─▶ B ─▶ C ─▶ target
 Server(addons=[ChainRouter("B:1080")])  # A
 Server(addons=[ChainRouter("C:1080")])  # B
-Server()                                # C
+Server()  # C
 ```
 
 UDP 链式代理在代理节点之间使用 TCP：

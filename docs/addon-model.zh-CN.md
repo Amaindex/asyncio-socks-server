@@ -48,7 +48,9 @@ class Addon:
         """返回 UdpRelayBase 拦截，None 不干预。"""
 
     # 数据转换（管道型）
-    async def on_data(self, direction: Direction, data: bytes, flow: Flow) -> bytes | None:
+    async def on_data(
+        self, direction: Direction, data: bytes, flow: Flow
+    ) -> bytes | None:
         """返回 bytes 写出，None 丢弃当前 chunk，抛异常中止。"""
 
     # 拆解（观察型）

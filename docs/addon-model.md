@@ -48,7 +48,9 @@ class Addon:
         """Return UdpRelayBase to intercept, None to abstain."""
 
     # Data transformation (pipeline)
-    async def on_data(self, direction: Direction, data: bytes, flow: Flow) -> bytes | None:
+    async def on_data(
+        self, direction: Direction, data: bytes, flow: Flow
+    ) -> bytes | None:
         """Return bytes to write, None to drop this chunk, raise to abort."""
 
     # Teardown (observational)

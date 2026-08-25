@@ -127,13 +127,13 @@ Properties:
 ```python
 @dataclass
 class Flow:
-    id: int               # Monotonically increasing
-    src: Address          # Client address
-    dst: Address          # Target address
+    id: int  # Monotonically increasing
+    src: Address  # Client address
+    dst: Address  # Target address
     protocol: Literal["tcp", "udp"]
-    started_at: float     # time.monotonic()
-    bytes_up: int = 0     # Client → target (TCP: post-addon; UDP: raw payload)
-    bytes_down: int = 0   # Target → client
+    started_at: float  # time.monotonic()
+    bytes_up: int = 0  # Client → target (TCP: post-addon; UDP: raw payload)
+    bytes_down: int = 0  # Target → client
 ```
 
 Without `Flow`, data hooks have no connection identity. Byte counters also become easy to duplicate across relay and addon code.
