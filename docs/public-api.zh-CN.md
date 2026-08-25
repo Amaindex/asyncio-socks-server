@@ -109,6 +109,7 @@ Addon 应把 `Flow` 视为可读上下文。修改字节计数或地址字段不
 
 | 方法 | 含义 |
 |------|------|
+| `summary()` | 不含 flow 和近期错误详情的有界聚合计数、速率和错误计数 |
 | `snapshot()` | 聚合计数和活跃 flow 快照 |
 | `flows()` | 活跃 flow 和最近关闭 flow 快照 |
 | `active_flows()` | 活跃 flow 快照 |
@@ -149,7 +150,9 @@ server = Server(
 | Endpoint | 含义 |
 |----------|------|
 | `GET /health` | 存活检查 |
+| `GET /stats/summary` | 用于周期性有界监控的 `FlowStats.summary()` |
 | `GET /stats` | `FlowStats.snapshot()` |
+| `GET /flows/active` | 不含已关闭历史的活跃 flow |
 | `GET /flows` | `FlowStats.flows()` |
 | `GET /errors` | `FlowStats.errors()` |
 | `GET /audit?top=25&device=` | `FlowAudit.snapshot()` |

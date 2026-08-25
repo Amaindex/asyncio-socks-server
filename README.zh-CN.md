@@ -77,9 +77,11 @@ server.run()
 Addon 顺序就是执行顺序。内置 addon 都是显式 opt-in；只有加入
 `StatsAPI` 才会启动 HTTP listener。
 
-`FlowStats` 没有网络副作用。使用它的 `snapshot()` 和 `flows()` 方法，
-可以自行搭建 HTTP API、metrics exporter 或日志管道，也可以搭配
-`StatsAPI` 使用一个小型本地 HTTP API。
+`FlowStats` 没有网络副作用。可直接使用它的 `summary()`、`snapshot()` 和
+`flows()` 方法，也可与 `StatsAPI` 搭配一个小型本地 HTTP API。常驻聚合
+监控应轮询 `GET /stats/summary`；该接口有意排除可变长度的 flow 和近期
+错误详情。只有 operator 明确需要当前 flow 详情时才读取
+`GET /flows/active`。
 `FlowAudit` 在内存中记录已关闭 flow 的用量，可通过 `StatsAPI`
 暴露类似 Kafra 的用量审计摘要。
 

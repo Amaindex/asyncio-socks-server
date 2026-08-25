@@ -39,9 +39,14 @@ Endpoints：
 | Endpoint | 用途 |
 |----------|------|
 | `GET /health` | 存活检查 |
+| `GET /stats/summary` | 有界的聚合总量、速率和错误计数 |
 | `GET /stats` | 总量、速率、错误、活跃 flows |
+| `GET /flows/active` | 不含已关闭历史的活跃 flows |
 | `GET /flows` | 活跃和最近关闭 flows |
 | `GET /errors` | 错误计数 |
+
+周期监控使用 `/stats/summary`。`/stats`、`/flows/active` 和 `/flows` 只用于
+显式详情读取，避免每次轮询的响应体随并发数或保留历史增长。
 
 如果需要看到 flow start，`FlowStats` 应放在竞争型路由 addon 之前。
 

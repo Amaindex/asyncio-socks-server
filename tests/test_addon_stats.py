@@ -102,6 +102,50 @@ class TestStatsServer:
                 await conn.writer.wait_closed()
             await _stop_server(server, task)
 
+    async def test_summary_endpoint_excludes_variable_length_details(self, echo_server):
+        stats = StatsAPI()
+        await stats.on_error(RuntimeError("sensitive detail"))
+        server, task = await _start_server(addons=[stats])
+        conn = None
+        try:
+            conn = await connect(Address(server.host, server.port), echo_server)
+            conn.writer.write(b"summary")
+            await conn.writer.drain()
+            assert await conn.reader.read(4096) == b"summary"
+
+            status, payload = await _get_json(stats.port, "/stats/summary")
+            assert status == 200
+            assert payload["active_flows"] == 1
+            assert payload["total_flows"] == 1
+            assert payload["errors"] == {
+                "total": 1,
+                "by_type": {"RuntimeError": 1},
+            }
+            assert "active" not in payload
+            assert "recent" not in payload["errors"]
+            assert "sensitive detail" not in json.dumps(payload)
+        finally:
+            if conn is not None:
+                conn.writer.close()
+                await conn.writer.wait_closed()
+            await _stop_server(server, task)
+
+    async def test_active_flows_endpoint_excludes_closed_history(self, echo_server):
+        stats = StatsAPI()
+        server, task = await _start_server(addons=[stats])
+        conn = None
+        try:
+            conn = await connect(Address(server.host, server.port), echo_server)
+            status, payload = await _get_json(stats.port, "/flows/active")
+            assert status == 200
+            assert len(payload["active"]) == 1
+            assert "recent_closed" not in payload
+        finally:
+            if conn is not None:
+                conn.writer.close()
+                await conn.writer.wait_closed()
+            await _stop_server(server, task)
+
     async def test_errors_endpoint(self):
         stats = StatsAPI()
         await stats.on_error(RuntimeError("boom"))

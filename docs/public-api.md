@@ -113,6 +113,7 @@ exposes plain Python methods:
 
 | Method | Meaning |
 |--------|---------|
+| `summary()` | Bounded aggregate counters, rates, and error counts without flow or recent-error details |
 | `snapshot()` | Aggregate counters and active flow snapshots |
 | `flows()` | Active flows and recent closed flow snapshots |
 | `active_flows()` | Active flow snapshots |
@@ -155,7 +156,9 @@ server = Server(
 | Endpoint | Meaning |
 |----------|---------|
 | `GET /health` | Liveness response |
+| `GET /stats/summary` | `FlowStats.summary()` for recurring bounded monitoring |
 | `GET /stats` | `FlowStats.snapshot()` |
+| `GET /flows/active` | Active flows without retained closed history |
 | `GET /flows` | `FlowStats.flows()` |
 | `GET /errors` | `FlowStats.errors()` |
 | `GET /audit?top=25&device=` | `FlowAudit.snapshot()` |

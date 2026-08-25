@@ -81,6 +81,13 @@ class FlowStats(Addon):
 
     def snapshot(self) -> dict[str, Any]:
         """Return aggregate counters plus active flow snapshots."""
+        payload = self.summary()
+        payload["errors"] = self.errors()
+        payload["active"] = self._active_flow_snapshots()
+        return payload
+
+    def summary(self) -> dict[str, Any]:
+        """Return aggregate counters without variable-length flow details."""
         self._sample_rates()
         active_bytes_up = sum(flow.bytes_up for flow in self._active.values())
         active_bytes_down = sum(flow.bytes_down for flow in self._active.values())
@@ -102,8 +109,10 @@ class FlowStats(Addon):
             "total_bytes_down": self.closed_bytes_down + active_bytes_down,
             "upload_rate": self._upload_rate,
             "download_rate": self._download_rate,
-            "errors": self.errors(),
-            "active": self._active_flow_snapshots(),
+            "errors": {
+                "total": self.total_errors,
+                "by_type": dict(sorted(self.errors_by_type.items())),
+            },
         }
 
     def active_flows(self) -> list[dict[str, Any]]:
@@ -414,6 +423,9 @@ class StatsAPI(Addon):
     def snapshot(self) -> dict[str, Any]:
         return self.stats.snapshot()
 
+    def summary(self) -> dict[str, Any]:
+        return self.stats.summary()
+
     async def _handle_http(
         self,
         reader: asyncio.StreamReader,
@@ -438,8 +450,16 @@ class StatsAPI(Addon):
                 await self._write_json(writer, 200, {"ok": True})
             elif path == "/stats":
                 await self._write_json(writer, 200, self.stats.snapshot())
+            elif path == "/stats/summary":
+                await self._write_json(writer, 200, self.stats.summary())
             elif path == "/flows":
                 await self._write_json(writer, 200, self.stats.flows())
+            elif path == "/flows/active":
+                await self._write_json(
+                    writer,
+                    200,
+                    {"active": self.stats.active_flows()},
+                )
             elif path == "/errors":
                 await self._write_json(writer, 200, self.stats.errors())
             elif path == "/audit":

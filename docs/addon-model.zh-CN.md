@@ -209,6 +209,7 @@ server = Server(addons=[stats])
 
 | 方法 | 内容 |
 |------|------|
+| `summary()` | 有界的聚合计数、速率和错误计数 |
 | `snapshot()` | 聚合计数、速率、错误和活跃 flow |
 | `flows()` | 活跃 flow 和最近关闭 flow 快照 |
 | `errors()` | 错误计数和最近错误 |
@@ -251,7 +252,9 @@ wrapper。只有显式加入 addon 列表时才会启动 listener：
 | Endpoint | 内容 |
 |----------|------|
 | `GET /health` | 存活响应 |
+| `GET /stats/summary` | `FlowStats.summary()` |
 | `GET /stats` | `FlowStats.snapshot()` |
+| `GET /flows/active` | 不含已关闭历史的活跃 flow |
 | `GET /flows` | `FlowStats.flows()` |
 | `GET /errors` | `FlowStats.errors()` |
 | `GET /audit?top=25&device=` | `FlowAudit.snapshot()` |

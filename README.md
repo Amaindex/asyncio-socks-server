@@ -77,8 +77,11 @@ server.run()
 Addon order is execution order. Built-in addons are opt-in; adding `StatsAPI`
 is what starts an HTTP listener.
 
-`FlowStats` has no network side effects. Use its `snapshot()` and `flows()`
-methods directly, or pair it with `StatsAPI` for a small local HTTP API.
+`FlowStats` has no network side effects. Use its `summary()`, `snapshot()`, and
+`flows()` methods directly, or pair it with `StatsAPI` for a small local HTTP
+API. Poll `GET /stats/summary` for aggregate monitoring; it deliberately omits
+variable-length flow and recent-error details. Fetch `GET /flows/active` only
+when an operator explicitly needs current flow details.
 `FlowAudit` records closed-flow usage in memory and can be exposed through
 `StatsAPI` for Kafra-like usage audit summaries.
 

@@ -39,9 +39,15 @@ Endpoints:
 | Endpoint | Use |
 |----------|-----|
 | `GET /health` | Liveness |
+| `GET /stats/summary` | Bounded aggregate totals, rates, and error counts |
 | `GET /stats` | Totals, rates, errors, active flows |
+| `GET /flows/active` | Active flows without retained closed history |
 | `GET /flows` | Active and recent closed flows |
 | `GET /errors` | Error counters |
+
+Use `/stats/summary` for recurring monitoring. Keep `/stats`, `/flows/active`,
+and `/flows` for explicit detail reads so response size does not grow with
+concurrency or retained history on every poll.
 
 `FlowStats` should appear before competitive routing addons if you need flow
 start visibility.

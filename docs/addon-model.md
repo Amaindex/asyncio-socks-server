@@ -209,6 +209,7 @@ addon hooks and exposes Python methods for application-specific presentation:
 
 | Method | Content |
 |--------|---------|
+| `summary()` | Bounded aggregate counters, rates, and error counts |
 | `snapshot()` | Aggregate counters, rates, errors, and active flows |
 | `flows()` | Active flows and recent closed flow snapshots |
 | `errors()` | Error counters and recent errors |
@@ -253,7 +254,9 @@ server = Server(addons=[audit, stats, api])
 | Endpoint | Content |
 |----------|---------|
 | `GET /health` | Liveness response |
+| `GET /stats/summary` | `FlowStats.summary()` |
 | `GET /stats` | `FlowStats.snapshot()` |
+| `GET /flows/active` | Active flows without retained closed history |
 | `GET /flows` | `FlowStats.flows()` |
 | `GET /errors` | `FlowStats.errors()` |
 | `GET /audit?top=25&device=` | `FlowAudit.snapshot()` |
